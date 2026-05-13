@@ -28,6 +28,16 @@ import {
 } from "@/lib/tasks";
 
 export const maxDuration = 60; // Multi-step agent execution requires up to 60 s; needs Vercel Pro or higher.
+const MAX_TASK_SUMMARY_LENGTH = 240;
+
+function summarizeTaskResult(input: string) {
+  const compact = input.replace(/\s+/g, " ").trim();
+  if (!compact) return null;
+  if (compact.length <= MAX_TASK_SUMMARY_LENGTH) return compact;
+  const clipped = compact.slice(0, MAX_TASK_SUMMARY_LENGTH);
+  const boundary = clipped.lastIndexOf(" ");
+  return `${(boundary > 60 ? clipped.slice(0, boundary) : clipped).trimEnd()}…`;
+}
 
 // ─── Safe math expression evaluator ─────────────────────────────────────────
 // A simple recursive-descent parser that evaluates arithmetic expressions
@@ -820,13 +830,13 @@ ${routingHint}
 ${workspaceContextSection}
 
 ## Planner / Executor
-- Active task id: ${taskId ?? "ephemeral"}
 - Intent: ${plannerOutput.intent}
 - Plan:
 ${plannerOutput.steps
   .map((step, index) => `${index + 1}. ${step.label} — ${step.detail}`)
   .join("\n")}
-- Keep step order explicit and report measurable progress through tool calls and final output.
+- Follow the plan in order unless the user explicitly asks to change course.
+- Report progress in your final response against the numbered plan steps.
 
 ### Capability-accurate responses
 - Do NOT use generic disclaimers such as "I can't access the internet" or "I have no access to external systems" as blanket statements
@@ -898,7 +908,7 @@ ${plannerOutput.steps
             progress: 100,
           });
           const taskSummary =
-            (text ?? "").replace(/\s+/g, " ").trim().slice(0, 240) || null;
+            summarizeTaskResult(text ?? "");
           await completeWorkspaceTask(taskId, taskSummary);
           activeTaskId = null;
         }

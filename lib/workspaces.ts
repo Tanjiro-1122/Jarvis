@@ -11,6 +11,7 @@ const CHUNK_SIZE = 900;
 const CHUNK_OVERLAP = 140;
 const SHORT_TOKEN_MATCH_SCORE = 2;
 const LONG_TOKEN_MATCH_SCORE = 3;
+const MAX_RETRIEVAL_CHUNK_CANDIDATES = 220;
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_INPUT_MAX_CHARS = 2_400;
 const SEMANTIC_SCORE_MULTIPLIER = 16;
@@ -311,7 +312,8 @@ function parseEmbeddingVector(value: unknown): number[] | null {
 }
 
 function cosineSimilarity(left: number[], right: number[]) {
-  const size = Math.min(left.length, right.length);
+  if (left.length !== right.length) return 0;
+  const size = left.length;
   if (size === 0) return 0;
 
   let dot = 0;
@@ -370,7 +372,11 @@ function toProjectPath(prefix: string, rawName: string) {
     .replace(/-+/g, "-")
     .toLowerCase()
     .slice(0, 96);
-  const safeName = cleaned || "item";
+  const safeNameCandidate = (cleaned || "item")
+    .split(".")
+    .filter((segment) => segment && segment !== "..")
+    .join(".");
+  const safeName = safeNameCandidate.replace(/^[-/.]+/, "") || "item";
   return `${prefix}/${safeName}`;
 }
 
@@ -1137,7 +1143,7 @@ export async function getWorkspaceRetrievalContext(options: {
       .select("source_kind, source_label, content, embedding")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
-      .limit(220),
+      .limit(MAX_RETRIEVAL_CHUNK_CANDIDATES),
     supabase
       .from("conversation_workspaces")
       .select("conversation_id, title")
@@ -1176,17 +1182,21 @@ export async function getWorkspaceRetrievalContext(options: {
     content: string;
     embedding?: unknown;
   }>)
-    .map((row) => ({
-      sourceKind: row.source_kind === "artifact" ? "artifact" : "document",
-      sourceLabel: row.source_label,
-      excerpt: summarizeText(row.content, 260) ?? row.content,
-      score:
-        computeScore(query, row.content) +
-        (queryEmbedding
-          ? cosineSimilarity(queryEmbedding, parseEmbeddingVector(row.embedding) ?? []) *
-            SEMANTIC_SCORE_MULTIPLIER
-          : 0),
-    }))
+    .map((row) => {
+      const lexicalScore = computeScore(query, row.content);
+      const chunkEmbedding = parseEmbeddingVector(row.embedding);
+      const semanticScore =
+        queryEmbedding && chunkEmbedding
+          ? cosineSimilarity(queryEmbedding, chunkEmbedding) * SEMANTIC_SCORE_MULTIPLIER
+          : 0;
+
+      return {
+        sourceKind: row.source_kind === "artifact" ? "artifact" : "document",
+        sourceLabel: row.source_label,
+        excerpt: summarizeText(row.content, 260) ?? row.content,
+        score: lexicalScore + semanticScore,
+      };
+    })
     .filter((hit) => hit.score > 0);
 
   const messageHits = ((messageResponse.data ?? []) as Array<{

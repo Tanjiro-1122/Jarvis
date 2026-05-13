@@ -1,7 +1,8 @@
 import { getSupabaseClient } from "@/lib/supabase";
 
 const MAX_TASKS_PER_QUERY = 25;
-const STALE_TASK_WINDOW_MS = 3 * 60 * 1000;
+const STALE_TASK_WINDOW_MS = 15 * 60 * 1000;
+const STALE_TASK_WINDOW_MINUTES = Math.round(STALE_TASK_WINDOW_MS / 60_000);
 
 export type WorkspaceTaskStatus =
   | "queued"
@@ -137,8 +138,7 @@ async function markStaleTasks(workspaceId: string) {
     .update({
       status: "failed",
       progress: 100,
-      error_message:
-        "Task was interrupted before completion. Use Resume to continue from the saved context.",
+      error_message: `Task was interrupted after exceeding the ${STALE_TASK_WINDOW_MINUTES}-minute activity window. Use Resume to continue from the saved context.`,
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -187,9 +187,9 @@ export async function createWorkspaceTask(options: {
         step_key: step.key,
         label: step.label,
         order_index: index,
-        status: index === 0 ? "running" : "pending",
+        status: "pending",
         detail: step.detail ?? null,
-        started_at: index === 0 ? new Date().toISOString() : null,
+        started_at: null,
       }))
     );
   }
@@ -203,6 +203,12 @@ export async function createWorkspaceTask(options: {
       updated_at: new Date().toISOString(),
     })
     .eq("id", taskResponse.data.id);
+
+  await supabase
+    .from("workspace_task_steps")
+    .update({ status: "running", started_at: new Date().toISOString() })
+    .eq("task_id", taskResponse.data.id)
+    .eq("order_index", 0);
 
   return taskResponse.data.id;
 }

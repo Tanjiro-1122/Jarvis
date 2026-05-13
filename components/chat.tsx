@@ -696,6 +696,7 @@ export function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const taskRefreshInFlightRef = useRef(false);
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
   const selectedArtifact =
@@ -941,8 +942,12 @@ export function Chat() {
     }
 
     const interval = window.setInterval(() => {
-      void refreshTasks(sessionId, workspaceId, conversationId);
-    }, 3500);
+      if (taskRefreshInFlightRef.current) return;
+      taskRefreshInFlightRef.current = true;
+      void refreshTasks(sessionId, workspaceId, conversationId).finally(() => {
+        taskRefreshInFlightRef.current = false;
+      });
+    }, 5000);
 
     return () => window.clearInterval(interval);
   }, [sessionId, workspaceId, conversationId, tasks, status]);
@@ -1053,10 +1058,7 @@ export function Chat() {
       experimental_attachments: files,
       allowEmptySubmit: hasFiles && !input.trim(),
     });
-    if (!hasFiles || input.trim()) {
-      // keep resumeTaskId for this submission body, then clear for future new tasks
-      setTimeout(() => setResumeTaskId(null), 0);
-    }
+    if (!hasFiles || input.trim()) setResumeTaskId(null);
     clearAttachments();
   }
 
