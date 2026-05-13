@@ -292,6 +292,14 @@ function buildRoutingHint(input: string, codeExecutionAvailable: boolean) {
   return hints.join("\n");
 }
 
+function sanitizeAttachmentName(name: string | undefined) {
+  const cleaned = (name ?? "file")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || "file";
+}
+
 function formatCodeExecutionSummary() {
   const codeExecution = getCodeExecutionAvailability();
 
@@ -776,7 +784,7 @@ ${workspaceContextSection}
         const attachmentSummary =
           latestAttachments.length > 0
             ? `Uploaded: ${latestAttachments
-                .map((attachment) => attachment.name ?? "file")
+                .map((attachment) => sanitizeAttachmentName(attachment.name))
                 .join(", ")}`
             : "";
         const combinedUserContent = [userContent, attachmentSummary]
