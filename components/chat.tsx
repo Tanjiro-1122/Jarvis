@@ -309,7 +309,7 @@ function getDocumentKindLabel(sourceKind: string) {
 
 function getSafeAttachmentImageUrl(
   url: string | undefined,
-  allowedProtocols: Array<"blob:" | "data:" | "http:" | "https:">
+  allowedProtocols: Array<"blob:" | "data:" | "https:">
 ) {
   if (!url) return undefined;
 
@@ -1311,7 +1311,6 @@ export function Chat() {
                         const safeImageUrl = getSafeAttachmentImageUrl(attachment.url, [
                           "blob:",
                           "data:",
-                          "http:",
                           "https:",
                         ]);
 
