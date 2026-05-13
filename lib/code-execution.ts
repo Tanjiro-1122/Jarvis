@@ -98,7 +98,10 @@ export const SUPPORTED_ARTIFACT_MIME_TYPES = [
   "image/svg+xml",
 ] as const;
 
-const SUPPORTED_ARTIFACT_MIME_TYPES_LIST = SUPPORTED_ARTIFACT_MIME_TYPES.join(", ");
+export const SUPPORTED_ARTIFACT_MIME_TYPES_FORMATTED =
+  SUPPORTED_ARTIFACT_MIME_TYPES.join(", ");
+export const SUPPORTED_ARTIFACT_MIME_TYPES_MARKDOWN =
+  SUPPORTED_ARTIFACT_MIME_TYPES.map((mimeType) => `\`${mimeType}\``).join(", ");
 
 const WORKER_BOOTSTRAP = `
 const { parentPort, workerData } = require("node:worker_threads");
@@ -169,9 +172,9 @@ function createArtifact(name, content, mimeType = "text/plain") {
   }
   const ALLOWED_MIME_TYPES = ${JSON.stringify(SUPPORTED_ARTIFACT_MIME_TYPES)};
   if (typeof mimeType !== "string" || !ALLOWED_MIME_TYPES.includes(mimeType)) {
-    throw new Error(
-      "Artifact MIME type not supported. Allowed: ${SUPPORTED_ARTIFACT_MIME_TYPES_LIST}."
-    );
+    throw new Error(${JSON.stringify(
+      `Artifact MIME type not supported. Allowed: ${SUPPORTED_ARTIFACT_MIME_TYPES_FORMATTED}.`
+    )});
   }
   const normalizedContent =
     typeof content === "string" ? content : JSON.stringify(content, null, 2);

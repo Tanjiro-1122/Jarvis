@@ -9,6 +9,8 @@
 import type { UIMessage } from "ai";
 import {
   SUPPORTED_ARTIFACT_MIME_TYPES,
+  SUPPORTED_ARTIFACT_MIME_TYPES_FORMATTED,
+  SUPPORTED_ARTIFACT_MIME_TYPES_MARKDOWN,
   type ExecutionLimits,
 } from "./code-execution";
 
@@ -174,7 +176,7 @@ export function formatCodeExecutionSummary(codeExecution: {
     `up to ${limits.maxArtifacts} artifacts of ${limits.maxArtifactBytes} bytes each,`,
     `and an isolated worker memory ceiling of ~${limits.memoryLimitMb}MB.`,
     "No imports, filesystem, process, or network access.",
-    `Supported artifact MIME types: ${SUPPORTED_ARTIFACT_MIME_TYPES.join(", ")}.`,
+    `Supported artifact MIME types: ${SUPPORTED_ARTIFACT_MIME_TYPES_FORMATTED}.`,
   ].join(" ");
 }
 
@@ -193,7 +195,7 @@ export function getCodeExecutionGuidance(available: boolean): string {
     "- Use `execute_code` for short self-contained JavaScript/TypeScript checks; include an explicit `return` to surface a final value.",
     "- If the user asks to run/evaluate code, call `execute_code` immediately rather than replying with prose alone.",
     "- For downloadable output use `createArtifact(name, content, mimeType?)` inside the snippet.",
-    `  Supported MIME types: ${SUPPORTED_ARTIFACT_MIME_TYPES.map((mimeType) => `\`${mimeType}\``).join(", ")}.`,
+    `  Supported MIME types: ${SUPPORTED_ARTIFACT_MIME_TYPES_MARKDOWN}.`,
     "- You can generate SVG charts/diagrams as `image/svg+xml` artifacts for visual outputs.",
     "- For CSV exports: `createArtifact('data.csv', rows.join('\\n'), 'text/csv')`.",
   ].join("\n");
