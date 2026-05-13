@@ -1414,6 +1414,8 @@ export function Chat() {
             <button
               type="button"
               className="secondary-button"
+              aria-label={showInfoSidebar ? "Hide info panels" : "Show info panels"}
+              aria-expanded={showInfoSidebar}
               onClick={() => setShowInfoSidebar((prev) => !prev)}
             >
               {showInfoSidebar ? "Hide Help Panels ➔" : "📊 Show Info Panels"}
