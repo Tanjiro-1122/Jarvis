@@ -677,36 +677,41 @@ export async function getWorkspaceBootstrap(
 
   const conversationById = new Map(conversations.map((item) => [item.id, item]));
 
-  const workspacesWithCounts = workspaces.map((workspace) => {
-    const workspaceMappings = mappings
-      .filter((mapping) => mapping.workspace_id === workspace.id)
-      .map((mapping) => {
-        const conversation = conversationById.get(mapping.conversation_id);
-        return {
-          id: mapping.conversation_id,
-          title: cleanTitle(mapping.title, "Untitled chat"),
-          createdAt: conversation?.created_at ?? mapping.created_at,
-          updatedAt: mapping.updated_at,
-        } satisfies WorkspaceConversationSummary;
-      })
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-
-    return {
-      id: workspace.id,
-      name: workspace.name,
-      description: workspace.description,
-      createdAt: workspace.created_at,
-      updatedAt: workspace.updated_at,
-      accessRole:
+  const workspacesWithCounts = workspaces
+    .map((workspace) => {
+      const accessRole =
         workspace.session_id === sessionId
           ? "owner"
-          : membershipByWorkspace.get(workspace.id) ?? "viewer",
-      conversationCount: workspaceMappings.length,
-      documentCount: documents.filter((document) => document.workspace_id === workspace.id).length,
-      artifactCount: artifactMeta.filter((artifact) => artifact.workspace_id === workspace.id).length,
-      conversations: workspaceMappings,
-    } satisfies WorkspaceSummary;
-  });
+          : membershipByWorkspace.get(workspace.id) ?? null;
+      if (!accessRole) return null;
+
+      const workspaceMappings = mappings
+        .filter((mapping) => mapping.workspace_id === workspace.id)
+        .map((mapping) => {
+          const conversation = conversationById.get(mapping.conversation_id);
+          return {
+            id: mapping.conversation_id,
+            title: cleanTitle(mapping.title, "Untitled chat"),
+            createdAt: conversation?.created_at ?? mapping.created_at,
+            updatedAt: mapping.updated_at,
+          } satisfies WorkspaceConversationSummary;
+        })
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+
+      return {
+        id: workspace.id,
+        name: workspace.name,
+        description: workspace.description,
+        createdAt: workspace.created_at,
+        updatedAt: workspace.updated_at,
+        accessRole,
+        conversationCount: workspaceMappings.length,
+        documentCount: documents.filter((document) => document.workspace_id === workspace.id).length,
+        artifactCount: artifactMeta.filter((artifact) => artifact.workspace_id === workspace.id).length,
+        conversations: workspaceMappings,
+      } satisfies WorkspaceSummary;
+    })
+    .filter((workspace): workspace is WorkspaceSummary => Boolean(workspace));
 
   let selectedArtifacts: WorkspaceArtifactSummary[] = [];
   if (selectedWorkspaceId) {

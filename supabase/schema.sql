@@ -136,5 +136,4 @@ on conflict (conversation_id) do nothing;
 insert into workspace_memberships (workspace_id, session_id, role)
 select id, session_id, 'owner'
 from workspaces
-on conflict (workspace_id, session_id) do update
-set role = excluded.role, updated_at = now();
+on conflict (workspace_id, session_id) do nothing;
