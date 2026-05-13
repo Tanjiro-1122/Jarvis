@@ -729,15 +729,17 @@ export function Chat() {
 
   async function syncWorkspaceSelection(
     nextWorkspaceId?: string | null,
-    preferredConversationId?: string | null
+    preferredConversationId?: string | null,
+    sessionOverride?: string | null
   ) {
-    if (!sessionId) return;
+    const activeSessionId = sessionOverride ?? sessionId;
+    if (!activeSessionId) return;
 
     setWorkspaceBusy(true);
     setWorkspaceError("");
 
     try {
-      let workspaceData = await fetchWorkspaceData(sessionId, nextWorkspaceId);
+      let workspaceData = await fetchWorkspaceData(activeSessionId, nextWorkspaceId);
       applyWorkspaceData(workspaceData);
 
       const resolvedWorkspaceId =
@@ -759,10 +761,10 @@ export function Chat() {
 
       if (!resolvedConversationId && resolvedWorkspaceId) {
         const createdConversation = await createConversationForWorkspace(
-          sessionId,
+          activeSessionId,
           resolvedWorkspaceId
         );
-        workspaceData = await fetchWorkspaceData(sessionId, resolvedWorkspaceId);
+        workspaceData = await fetchWorkspaceData(activeSessionId, resolvedWorkspaceId);
         applyWorkspaceData(workspaceData);
         resolvedConversationId = createdConversation.id;
       }
@@ -776,7 +778,7 @@ export function Chat() {
         localStorage.setItem("jarvis_conversation_id", resolvedConversationId);
       }
 
-      await loadConversation(sessionId, resolvedWorkspaceId, resolvedConversationId);
+      await loadConversation(activeSessionId, resolvedWorkspaceId, resolvedConversationId);
     } catch (error) {
       setWorkspaceError(
         error instanceof Error ? error.message : "Failed to load workspace data."
@@ -798,7 +800,11 @@ export function Chat() {
     const preferredConversationId = localStorage.getItem("jarvis_conversation_id");
 
     if (active) {
-      void syncWorkspaceSelection(preferredWorkspaceId, preferredConversationId);
+      void syncWorkspaceSelection(
+        preferredWorkspaceId,
+        preferredConversationId,
+        activeSessionId
+      );
     }
 
     return () => {
