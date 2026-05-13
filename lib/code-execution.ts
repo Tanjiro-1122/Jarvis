@@ -89,6 +89,7 @@ const logs = [];
 const errors = [];
 const artifacts = [];
 const startedAt = Date.now();
+const TRUNCATION_MARKER = "\\n...[truncated]";
 
 function serialize(value) {
   if (typeof value === "string") return value;
@@ -114,7 +115,7 @@ function clampText(text) {
     return text;
   }
   consumedOutputChars = maxOutputChars;
-  return text.slice(0, Math.max(0, remaining - 20)) + "\\n...[truncated]";
+  return text.slice(0, Math.max(0, remaining - TRUNCATION_MARKER.length)) + TRUNCATION_MARKER;
 }
 
 function pushLine(target, prefix, values) {
@@ -393,7 +394,10 @@ function runWorker(
       workerData: payload,
       resourceLimits: {
         maxOldGenerationSizeMb: limits.memoryLimitMb,
-        maxYoungGenerationSizeMb: Math.max(16, Math.floor(limits.memoryLimitMb / 2)),
+        maxYoungGenerationSizeMb: Math.max(
+          4,
+          Math.min(16, Math.floor(limits.memoryLimitMb / 2))
+        ),
       },
     });
 

@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+const CODE_PREVIEW_MAX_LENGTH = 220;
 const ACCEPTED_TYPES = [
   "image/jpeg",
   "image/png",
@@ -302,7 +303,9 @@ function CodeExecutionCard({
   const isPending = !result;
   const preview = args.code?.trim() || "";
   const codePreview =
-    preview.length > 220 ? `${preview.slice(0, 220)}\n…` : preview || "Preparing snippet…";
+    preview.length > CODE_PREVIEW_MAX_LENGTH
+      ? `${preview.slice(0, CODE_PREVIEW_MAX_LENGTH)}\n…`
+      : preview || "Preparing snippet…";
 
   return (
     <div className={`tool-card tool-card--execution ${isPending ? "tool-card--pending" : ""}`}>
