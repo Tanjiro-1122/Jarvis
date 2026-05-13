@@ -158,13 +158,9 @@ function createArtifact(name, content, mimeType = "text/plain") {
     "text/plain", "text/csv", "text/html", "text/markdown",
     "text/xml", "application/json", "application/xml", "image/svg+xml",
   ];
-  if (
-    typeof mimeType !== "string" ||
-    (!mimeType.startsWith("text/") &&
-      !ALLOWED_MIME_TYPES.includes(mimeType))
-  ) {
+  if (typeof mimeType !== "string" || !ALLOWED_MIME_TYPES.includes(mimeType)) {
     throw new Error(
-      "Artifact MIME type not supported. Allowed: text/*, application/json, application/xml, image/svg+xml."
+      "Artifact MIME type not supported. Allowed: text/plain, text/csv, text/html, text/markdown, text/xml, application/json, application/xml, image/svg+xml."
     );
   }
   const normalizedContent =

@@ -155,7 +155,8 @@ export function formatCodeExecutionSummary(codeExecution: {
   limits?: ExecutionLimits;
 }): string {
   if (!codeExecution.available) {
-    return `- Sandboxed code execution is unavailable in this deployment because ${codeExecution.reason}.`;
+    const reason = codeExecution.reason ?? "it has been disabled in this deployment";
+    return `- Sandboxed code execution is unavailable in this deployment because ${reason}.`;
   }
 
   const { limits } = codeExecution;
@@ -165,10 +166,10 @@ export function formatCodeExecutionSummary(codeExecution: {
 
   return [
     "- `execute_code` — sandboxed JavaScript/TypeScript execution for short self-contained snippets only.",
-    `Limits: ${limits.timeoutMs} ms timeout, ${limits.maxSourceLength} characters of source,`,
+    `Limits: ${limits.timeoutMs}ms timeout, ${limits.maxSourceLength} characters of source,`,
     `${limits.maxOutputChars} characters of combined logs,`,
     `up to ${limits.maxArtifacts} artifacts of ${limits.maxArtifactBytes} bytes each,`,
-    `and an isolated worker memory ceiling of ~${limits.memoryLimitMb} MB.`,
+    `and an isolated worker memory ceiling of ~${limits.memoryLimitMb}MB.`,
     "No imports, filesystem, process, or network access.",
     "Supported artifact MIME types: text/plain, text/csv, text/markdown, text/html, application/json, image/svg+xml.",
   ].join(" ");

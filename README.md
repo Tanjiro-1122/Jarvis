@@ -54,8 +54,8 @@ This stage focuses on four areas that move Jarvis from a chat-with-tools app tow
 
 #### 4. Execution environment breadth
 - Expanded artifact MIME types: `text/plain`, `text/csv`, `text/markdown`, `text/html`, `text/xml`, `application/json`, `application/xml`, **`image/svg+xml`** — enabling SVG chart/diagram generation as downloadable artifacts.
-- Default sandbox limits raised: timeout `5 000 ms` (was 2 000), source cap `10 000` chars (was 6 000), output cap `12 000` (was 8 000), max artifacts `5` (was 3), per-artifact cap `24 000` bytes (was 12 000).
-- Env-var clamp ceilings expanded: timeout up to `30 s`, source up to `50 000` chars, output up to `80 000`, artifacts up to `20`, per-artifact up to `200 000` bytes, memory up to `512 MB`.
+- Default sandbox limits raised: timeout `5000ms` (was 2000ms), source cap `10000` chars (was 6000), output cap `12000` (was 8000), max artifacts `5` (was 3), per-artifact cap `24000` bytes (was 12000).
+- Env-var clamp ceilings expanded: timeout up to `30s`, source up to `50000` chars, output up to `80000`, artifacts up to `20`, per-artifact up to `200000` bytes, memory up to `512MB`.
 - System-prompt guidance updated to advertise SVG generation and CSV export patterns to the model.
 
 #### What this stage does NOT include
@@ -279,8 +279,8 @@ Jarvis can run short self-contained JavaScript or TypeScript snippets inside a c
 
 Execution is intentionally narrow and safety-focused:
 
-- **Snippets only** — default source cap is `10 000` characters
-- **Timeout enforced** — default execution timeout is `5 000 ms`
+- **Snippets only** — default source cap is `10000` characters
+- **Timeout enforced** — default execution timeout is `5000ms`
 - **Resource constrained** — each run executes in an isolated worker with a configurable memory ceiling (default 64 MB)
 - **No unrestricted host access** — imports, external modules, network access, filesystem access, and process access are blocked
 - **Supported artifact MIME types** — `text/plain`, `text/csv`, `text/markdown`, `text/html`, `text/xml`, `application/json`, `application/xml`, `image/svg+xml`

@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (!saved) {
-    logError("api.artifacts.POST", "Failed to persist artifact");
+    logError("api.artifacts.POST", new Error("saveArtifact returned null"));
     return NextResponse.json(
       { error: "Failed to persist artifact. Supabase may not be configured." },
       { status: 500 }
