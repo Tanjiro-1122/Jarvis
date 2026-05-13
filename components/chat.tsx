@@ -81,7 +81,7 @@ export function Chat() {
       e.preventDefault();
       return;
     }
-    const hasFiles = files && files.length > 0;
+    const hasFiles = files != null && files.length > 0;
     if (!input.trim() && !hasFiles) {
       e.preventDefault();
       return;
@@ -143,7 +143,7 @@ export function Chat() {
         )}
       </div>
 
-      {(files && files.length > 0) && (
+      {files != null && files.length > 0 && (
         <div className="attachment-preview">
           {Array.from(files).map((file, idx) => (
             <div key={idx} className="attachment-preview-item">
