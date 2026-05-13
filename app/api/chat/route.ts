@@ -32,7 +32,7 @@ export async function POST(req: Request) {
           .map((p) => p.text)
           .join("");
 
-        if (!userContent && !text) return;
+        if (!userContent || !text) return;
 
         await supabase.from("messages").insert([
           {

@@ -69,10 +69,13 @@ export function Chat() {
       });
   }, [setMessages]);
 
-  // Scroll to the latest message whenever messages change.
+  // Scroll to the latest message when a response finishes or a new message is added,
+  // but not on every intermediate streaming token to avoid jank.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (status === "ready" || status === "error") {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [status, messages.length]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
 
+const MAX_SESSION_ID_LENGTH = 128;
+
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId");
-  if (!sessionId || typeof sessionId !== "string" || sessionId.length > 128) {
+  if (!sessionId || typeof sessionId !== "string" || sessionId.length > MAX_SESSION_ID_LENGTH) {
     return NextResponse.json({ error: "Invalid sessionId." }, { status: 400 });
   }
 
