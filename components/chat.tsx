@@ -1061,15 +1061,20 @@ export function Chat() {
             body: formData,
           });
 
+          if (!res.ok) {
+            throw new Error("Upload failed");
+          }
+
           const data = await res.json();
 
           if (data.url) {
             setInput((prev: string) =>
-              prev ? `${prev}\n![pasted screenshot](${data.url})` : `![pasted screenshot](${data.url})`
+              `${prev}${prev ? "\n" : ""}![pasted screenshot](${data.url})`
             );
           }
         } catch (err) {
           console.error("Failed to upload pasted image:", err);
+          alert("Failed to upload pasted image");
         }
       }
     }
