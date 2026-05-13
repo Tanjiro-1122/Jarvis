@@ -23,22 +23,55 @@ Jarvis is a Vercel-ready AI super-agent built with Next.js and the Vercel AI SDK
 
 This repo keeps Jarvis branding and current integrations, and is being improved in stages toward a more capable, production-grade AI workspace experience.
 
-### Stage 1 — Implemented in this PR
+### Stage 1 — Implemented
 
 - Reliability improvements for sandbox orchestration so execution-oriented requests trigger `execute_code` more consistently.
 - Stronger capability-aware prompting to prefer tool-backed execution/results over generic refusal prose.
 - Structured sandbox failure handling for timeout/import/network/runtime cases, including clearer guidance.
 - Better execution result UX in tool cards (clearer failure classification and remediation hints).
-- Artifact flow remains via sandbox `createArtifact(...)` and is surfaced in execution result cards.
+- Artifact flow via sandbox `createArtifact(...)` surfaced in execution result cards.
+
+### Stage 2 — Platform Foundation Hardening (this stage)
+
+This stage focuses on four areas that move Jarvis from a chat-with-tools app toward a more production-ready platform:
+
+#### 1. Infrastructure depth
+- **`lib/errors.ts`** — typed `JarvisError` class and `logError` / `safeErrorMessage` helpers for consistent structured error handling across all API routes.
+- **`lib/supabase.ts`** — auth options (`persistSession: false`, `autoRefreshToken: false`) added to the Supabase client; `resetSupabaseClient()` exported for test isolation; env-var values trimmed before use.
+- All API routes use `logError` for structured logging rather than bare `console.error` calls.
+
+#### 2. Persistence model maturity
+- **`lib/db.ts`** — database service layer that centralises every Supabase query (`getOrCreateConversation`, `getConversationMessages`, `saveMessagePair`, `saveArtifact`, `getConversationArtifacts`, `getWorkspaces`, `createWorkspace`). API routes are now thin consumers of this layer.
+- **`app/api/artifacts/route.ts`** — new `GET` and `POST` endpoints for retrieving and persisting execution artifacts tied to a conversation. Input is validated with Zod.
+- **New Supabase schema** (see [Set up Supabase](#3-set-up-supabase)) — `workspaces` and `artifacts` tables; `workspace_id` nullable column on `conversations`.
+- `app/api/history/route.ts` now delegates entirely to `lib/db.ts`.
+
+#### 3. Orchestration sophistication
+- **`lib/orchestration.ts`** — `detectToolIntent` inspects the latest user message for signals across six intent categories (`code_execution`, `web_search`, `github_analysis`, `datetime`, `calculate`, `plan`) and returns the most specific match. Checks are ordered by specificity to minimise false positives.
+- The chat route derives a `toolChoice` hint from the detected intent: code-execution requests force `execute_code`; datetime queries force `get_current_datetime`; everything else stays `"auto"`.
+- The `execute_code` tool description now explicitly lists downloadable artifact MIME types to guide model output.
+- `formatCodeExecutionSummary` and `getCodeExecutionGuidance` are now in `lib/orchestration.ts` so they can be reused and tested independently.
+
+#### 4. Execution environment breadth
+- Expanded artifact MIME types: `text/plain`, `text/csv`, `text/markdown`, `text/html`, `text/xml`, `application/json`, `application/xml`, **`image/svg+xml`** — enabling SVG chart/diagram generation as downloadable artifacts.
+- Default sandbox limits raised: timeout `5000ms` (was 2000ms), source cap `10000` chars (was 6000), output cap `12000` (was 8000), max artifacts `5` (was 3), per-artifact cap `24000` bytes (was 12000).
+- Env-var clamp ceilings expanded: timeout up to `30s`, source up to `50000` chars, output up to `80000`, artifacts up to `20`, per-artifact up to `200000` bytes, memory up to `512MB`.
+- System-prompt guidance updated to advertise SVG generation and CSV export patterns to the model.
+
+#### What this stage does NOT include
+- Frontend workspace sidebar or UI changes — those are planned for Stage 3.
+- Vector embeddings or semantic retrieval — planned for Stage 4.
+- Background / resumable tasks — planned for Stage 5.
+- Binary artifact types (images rendered by the model, PDFs) — not yet supported.
+- Shared workspaces or multi-user collaboration.
 
 ### Planned Next Stages
 
-- **Stage 2: Professional UI refinement** — cleaner premium visual design, stronger hierarchy, better mobile polish.
-- **Stage 3: Retrieval + workspace memory** — stronger context recall and higher-quality long-running task continuity.
-- **Stage 4: Project/file workspaces** — richer project-scoped context and file-level workflows.
-- **Stage 5: Artifact persistence + resumable tasks** — durable artifacts and resumable multi-step sessions.
-- **Stage 6: Rich coding workflows** — stronger iterative coding loops and deeper developer workflows.
-- **Stage 7: Safer broader execution infra** — expanded execution capabilities with stronger safety and operational controls.
+- **Stage 3: Professional UI + workspace UX** — sidebar-based workspace layout, artifact panel, cleaner chat hierarchy, better mobile polish.
+- **Stage 4: Retrieval + workspace memory** — stronger context recall with chunking and embeddings.
+- **Stage 5: Artifact persistence + resumable tasks** — durable artifact history, downloadable from session, resumable multi-step sessions.
+- **Stage 6: Rich coding workflows** — iterative coding loops, multi-file context, deeper developer tooling.
+- **Stage 7: Broader execution infra** — safer isolated runtimes, optional package support, background jobs.
 
 ## Stack
 
@@ -95,12 +128,12 @@ GITHUB_TOKEN=
 # Sandboxed code execution — enabled by default on the Node.js runtime
 JARVIS_CODE_EXECUTION_ENABLED=true
 
-# Optional sandbox tuning
-JARVIS_CODE_TIMEOUT_MS=2000
-JARVIS_CODE_MAX_SOURCE_LENGTH=6000
-JARVIS_CODE_MAX_OUTPUT_CHARS=8000
-JARVIS_CODE_MAX_ARTIFACTS=3
-JARVIS_CODE_MAX_ARTIFACT_BYTES=12000
+# Optional sandbox tuning — defaults shown; all values clamped to safe ranges
+JARVIS_CODE_TIMEOUT_MS=5000
+JARVIS_CODE_MAX_SOURCE_LENGTH=10000
+JARVIS_CODE_MAX_OUTPUT_CHARS=12000
+JARVIS_CODE_MAX_ARTIFACTS=5
+JARVIS_CODE_MAX_ARTIFACT_BYTES=24000
 JARVIS_CODE_MEMORY_LIMIT_MB=64
 ```
 
@@ -109,14 +142,26 @@ JARVIS_CODE_MEMORY_LIMIT_MB=64
 ### 3. Set up Supabase (for persistent history)
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. Open the **SQL Editor** and run:
+2. Open the **SQL Editor** and run the full schema below.
+
+**Fresh install** — run everything:
 
 ```sql
--- One conversation per browser session
-create table conversations (
+-- Optional workspace grouping (one workspace per project)
+create table workspaces (
   id         uuid primary key default gen_random_uuid(),
   session_id text not null,
-  created_at timestamptz default now()
+  name       text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- One conversation per browser session (workspace_id is optional)
+create table conversations (
+  id           uuid primary key default gen_random_uuid(),
+  session_id   text not null,
+  workspace_id uuid references workspaces(id) on delete set null,
+  created_at   timestamptz default now()
 );
 
 -- Every user / assistant message
@@ -128,8 +173,52 @@ create table messages (
   created_at      timestamptz default now()
 );
 
+-- Persisted code-execution artifacts tied to a conversation
+create table artifacts (
+  id              uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  name            text not null,
+  mime_type       text not null,
+  content         text not null,
+  bytes           integer not null,
+  created_at      timestamptz default now()
+);
+
+create index on workspaces(session_id, updated_at);
 create index on conversations(session_id, created_at);
 create index on messages(conversation_id, created_at);
+create index on artifacts(conversation_id, created_at);
+```
+
+**Existing install (Stage 1 → Stage 2 migration)** — add only the new objects:
+
+```sql
+-- Add workspace table
+create table if not exists workspaces (
+  id         uuid primary key default gen_random_uuid(),
+  session_id text not null,
+  name       text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Add workspace reference to conversations (nullable, backward-compatible)
+alter table conversations
+  add column if not exists workspace_id uuid references workspaces(id) on delete set null;
+
+-- Add artifacts table
+create table if not exists artifacts (
+  id              uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  name            text not null,
+  mime_type       text not null,
+  content         text not null,
+  bytes           integer not null,
+  created_at      timestamptz default now()
+);
+
+create index if not exists on workspaces(session_id, updated_at);
+create index if not exists on artifacts(conversation_id, created_at);
 ```
 
 3. In **Settings → API** copy:
@@ -186,17 +275,23 @@ Jarvis can run short self-contained JavaScript or TypeScript snippets inside a c
 - The final returned value (`return` it explicitly from the snippet)
 - `console.log` / `console.info` output
 - Warnings and errors
-- Text artifacts created with `createArtifact(name, content, mimeType?)`
+- Artifacts created with `createArtifact(name, content, mimeType?)`
 
 Execution is intentionally narrow and safety-focused:
 
-- **Small snippets only** — default source cap is `6000` characters
-- **Timeout enforced** — default execution timeout is `2000 ms`
-- **Resource constrained** — each run executes in an isolated worker with a configurable memory ceiling
+- **Snippets only** — default source cap is `10000` characters
+- **Timeout enforced** — default execution timeout is `5000ms`
+- **Resource constrained** — each run executes in an isolated worker with a configurable memory ceiling (default 64 MB)
 - **No unrestricted host access** — imports, external modules, network access, filesystem access, and process access are blocked
-- **Text artifacts only** — `text/*` and `application/json` artifacts are supported
+- **Supported artifact MIME types** — `text/plain`, `text/csv`, `text/markdown`, `text/html`, `text/xml`, `application/json`, `application/xml`, `image/svg+xml`
+  - SVG artifacts let Jarvis generate downloadable charts and diagrams
+  - CSV artifacts let Jarvis export structured data tables
 
 Set `JARVIS_CODE_EXECUTION_ENABLED=false` if you need to turn sandboxed execution off for a deployment.
+
+### Artifact persistence (`/api/artifacts`)
+
+Execution artifacts can be persisted to Supabase via the new `POST /api/artifacts` endpoint. Once saved, they are retrievable with `GET /api/artifacts?conversationId=<uuid>`. This endpoint requires Supabase to be configured; it returns an error when it is not. The frontend currently renders artifacts inline in the chat; a dedicated artifact panel is planned for Stage 3.
 
 ### Capability-aware responses
 
@@ -245,23 +340,27 @@ Assistant text is rendered with full Markdown support: headings, **bold**, `inli
 jarvis/
 ├─ app/
 │  ├─ api/
+│  │  ├─ artifacts/route.ts        # Persist / retrieve execution artifacts
 │  │  ├─ auth/
-│  │  │  ├─ login/route.ts      # Validates password, sets session cookie
-│  │  │  └─ logout/route.ts     # Clears session cookie
-│  │  ├─ chat/route.ts          # Streaming agentic chat API (tools + maxSteps)
-│  │  └─ history/route.ts       # Returns conversation history for a session
-│  ├─ login/page.tsx            # Login page
-│  ├─ globals.css               # Global styles (dark theme + agent UI)
-│  ├─ layout.tsx                # Root layout
-│  └─ page.tsx                  # Home page (protected)
+│  │  │  ├─ login/route.ts         # Validates password, sets session cookie
+│  │  │  └─ logout/route.ts        # Clears session cookie
+│  │  ├─ chat/route.ts             # Streaming agentic chat API (tools + maxSteps)
+│  │  └─ history/route.ts          # Returns conversation history for a session
+│  ├─ login/page.tsx               # Login page
+│  ├─ globals.css                  # Global styles (dark theme + agent UI)
+│  ├─ layout.tsx                   # Root layout
+│  └─ page.tsx                     # Home page (protected)
 ├─ components/
-│  └─ chat.tsx                  # Chat UI — tool cards, markdown, status badge
+│  └─ chat.tsx                     # Chat UI — tool cards, markdown, status badge
 ├─ lib/
-│  ├─ auth.ts                   # Auth helpers
-│  ├─ code-execution.ts         # Sandboxed JS/TS execution helpers
-│  └─ supabase.ts               # Server-side Supabase client
-├─ middleware.ts                 # Route protection
-├─ .env.example                 # Environment variable template
+│  ├─ auth.ts                      # Auth helpers
+│  ├─ code-execution.ts            # Sandboxed JS/TS execution helpers
+│  ├─ db.ts                        # Database service layer (Supabase queries)
+│  ├─ errors.ts                    # Typed error class and structured logging
+│  ├─ orchestration.ts             # Intent detection, tool routing, prompt helpers
+│  └─ supabase.ts                  # Server-side Supabase client
+├─ middleware.ts                   # Route protection
+├─ .env.example                    # Environment variable template
 ├─ package.json
 └─ tsconfig.json
 ```
@@ -295,9 +394,11 @@ jarvis/
 
 - **Web search requires TAVILY_API_KEY** — without it, Jarvis will tell you the key is missing and suggest adding it. Get a free key at [tavily.com](https://tavily.com).
 - **GitHub analysis is public-only by default** — private repos require a `GITHUB_TOKEN` with appropriate permissions.
-- **Sandbox scope is intentionally narrow** — execution is limited to short JavaScript/TypeScript snippets, not arbitrary repos, package installs, or full builds.
+- **Sandbox scope is intentionally narrow** — execution is limited to short self-contained JavaScript/TypeScript snippets, not arbitrary repos, package installs, or full builds.
 - **No external I/O in the sandbox** — network access, filesystem access, package installs, and child processes are blocked.
 - **Binary files (PDF, DOCX)** — not supported; only images and plain-text variants are processed end-to-end.
-- **Artifacts are text-only and ephemeral** — they render in the current response and are not persisted to Supabase.
-- **Attachments not persisted** — only text content is saved to Supabase; tool call metadata and files are ephemeral.
+- **Artifacts are ephemeral in the UI** — execution artifacts render inline in the chat response. The `/api/artifacts` endpoint allows optional server-side persistence to Supabase, but the frontend does not yet display a persistent artifact history panel (planned for Stage 3).
+- **Attachments not persisted** — only text content is saved to Supabase; tool call metadata, images, and file uploads are ephemeral.
 - **GitHub API rate limit** — without `GITHUB_TOKEN`, unauthenticated requests are limited to 60/hour per IP.
+- **No workspace UI yet** — the `workspaces` table is supported in the schema and `lib/db.ts`, but the frontend does not yet expose workspace switching (planned for Stage 3).
+- **No vector retrieval** — there is no embedding or semantic search over uploaded content; retrieval is limited to including the full document text in the model context window.
