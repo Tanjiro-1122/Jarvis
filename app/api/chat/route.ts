@@ -1,5 +1,6 @@
 import { streamText, UIMessage, convertToCoreMessages, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { Octokit } from "@octokit/rest";
 import { z } from "zod";
 import {
   executeSandboxedCode,
@@ -62,6 +63,14 @@ function cleanupRateWindow(now: number) {
 }
 
 const MAX_TASK_SUMMARY_LENGTH = 240;
+
+function getOctokitClient() {
+  const githubToken = process.env.GITHUB_TOKEN;
+  return new Octokit({
+    ...(githubToken ? { auth: githubToken } : {}),
+    userAgent: "Jarvis-Super-Agent/1.0 (+https://github.com/Tanjiro-1122/Jarvis)",
+  });
+}
 
 function summarizeTaskResult(input: string) {
   const compact = input.replace(/\s+/g, " ").trim();
@@ -651,6 +660,89 @@ const baseAgentTools = {
       }
     },
   }),
+
+  readRepositoryFile: tool({
+    description:
+      "Read the complete code contents of a specific file in the GitHub repository before making edits.",
+    parameters: z.object({
+      owner: z.string().describe("The GitHub username (e.g., 'Tanjiro-1122')."),
+      repo: z.string().describe("The repository name (e.g., 'Jarvis')."),
+      path: z
+        .string()
+        .describe("The path to the file relative to the repo root (e.g., 'app/api/chat/route.ts')."),
+    }),
+    execute: async ({ owner, repo, path }) => {
+      try {
+        const octokit = getOctokitClient();
+        const { data } = await octokit.repos.getContent({
+          owner,
+          repo,
+          path,
+        });
+
+        if (Array.isArray(data)) {
+          return {
+            success: false,
+            error: "The provided path points to a directory, not a file.",
+          };
+        }
+        if (!("content" in data) || typeof data.content !== "string") {
+          return {
+            success: false,
+            error: "The file content is unavailable from the GitHub API response.",
+          };
+        }
+        if (data.encoding !== "base64") {
+          return {
+            success: false,
+            error: `Unsupported file encoding: ${data.encoding ?? "unknown"}. Only base64 encoding is supported.`,
+          };
+        }
+
+        const decodedContent = Buffer.from(data.content, "base64").toString("utf-8");
+        return { success: true, path, content: decodedContent };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  }),
+
+  listRepositoryTree: tool({
+    description:
+      "List the complete file structure and folder layout of the GitHub repository.",
+    parameters: z.object({
+      owner: z.string().describe("The GitHub username."),
+      repo: z.string().describe("The repository name."),
+    }),
+    execute: async ({ owner, repo }) => {
+      try {
+        const octokit = getOctokitClient();
+        const { data: repoData } = await octokit.repos.get({ owner, repo });
+        const defaultBranch = repoData.default_branch;
+
+        const { data: refData } = await octokit.git.getRef({
+          owner,
+          repo,
+          ref: `heads/${defaultBranch}`,
+        });
+
+        const { data: treeData } = await octokit.git.getTree({
+          owner,
+          repo,
+          tree_sha: refData.object.sha,
+          recursive: "true",
+        });
+
+        const filePaths = treeData.tree
+          .filter((item) => item.type === "blob" && typeof item.path === "string")
+          .map((item) => item.path);
+
+        return { success: true, defaultBranch, files: filePaths };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  }),
 };
 
 function getAgentTools({
@@ -929,7 +1021,13 @@ ${retrievalHits
 
     const result = streamText({
       model: openai("gpt-4o-mini"),
-      system: `You are Jarvis, an advanced AI super-agent. You are intelligent, capable, and methodical.
+      system: `You are Jarvis, a self-healing autonomous workspace developer agent. You are intelligent, capable, and methodical.
+
+## Self-Healing Operating Procedure
+1. If the user reports an error or asks to modify/fix functionality, run \`listRepositoryTree\` first to map the codebase.
+2. Then run \`readRepositoryFile\` on the relevant file to inspect the exact code contents. Never guess file contents.
+3. Diagnose the issue and apply the fix step-by-step.
+4. Confirm what you modified when done.
 
 ## Your Built-in Tools
 - \`get_current_datetime\` — real current date and time (never guess the date)
@@ -937,6 +1035,8 @@ ${retrievalHits
 - \`create_task_plan\` — numbered step-by-step plan shown as a visual card
 - \`web_search\` — live web search via Tavily (requires TAVILY_API_KEY to be set in the deployment)
 - \`analyze_github_repo\` — fetch metadata, README, and file tree for any public GitHub repo
+- \`listRepositoryTree\` — list complete repository file/folder layout
+- \`readRepositoryFile\` — read full file contents from a repository path before editing
 ${codeExecutionSummary}
 
 ## Additional Context from Uploads
