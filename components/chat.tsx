@@ -7,7 +7,6 @@ const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_TYPES = [
   "image/jpeg",
-  "image/jpg",
   "image/png",
   "image/gif",
   "image/webp",
@@ -150,7 +149,11 @@ export function Chat() {
             <div key={idx} className="attachment-preview-item">
               {file.type.startsWith("image/") ? (
                 <img
-                  src={previewUrls[idx]}
+                  src={
+                    previewUrls[idx]?.startsWith("blob:")
+                      ? previewUrls[idx]
+                      : ""
+                  }
                   alt={file.name}
                   className="attachment-preview-img"
                 />

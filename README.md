@@ -86,7 +86,7 @@ Click the **📎** button in the chat input to select one or more files. A previ
 ### Supported types (end-to-end)
 | Type | Extensions | AI processing |
 |------|-----------|--------------|
-| Images | JPEG, PNG, GIF, WEBP | ✅ Full – model sees the image |
+| Images | JPEG / JPG, PNG, GIF, WEBP | ✅ Full – model sees the image |
 | Plain text | .txt, .csv, .md | ✅ Full – text is read by the model |
 | Other binary (PDF, DOCX, …) | — | ⚠️ Not supported by `gpt-4o-mini` |
 
