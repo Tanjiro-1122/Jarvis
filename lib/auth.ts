@@ -1,5 +1,5 @@
 /**
- * Computes a deterministic HMAC-SHA-256 token from the AUTH_SECRET.
+ * Computes a deterministic HMAC-SHA-256 token from the session signing secret.
  * Compatible with both the Edge (middleware) and Node.js (API route) runtimes.
  */
 export async function computeToken(secret: string): Promise<string> {
@@ -19,6 +19,36 @@ export async function computeToken(secret: string): Promise<string> {
   return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export function getAppPassword(): string | undefined {
+  const appPassword = process.env.APP_PASSWORD;
+  return appPassword ? appPassword : undefined;
+}
+
+/**
+ * Returns the session signing secret. SESSION_SECRET is preferred, AUTH_SECRET
+ * is supported for backward compatibility, and APP_PASSWORD is the fallback so
+ * APP_PASSWORD-only deployments still work.
+ */
+export function getSessionSecret(): string | undefined {
+  const sessionSecret =
+    process.env.SESSION_SECRET ?? process.env.AUTH_SECRET ?? getAppPassword();
+  return sessionSecret ? sessionSecret : undefined;
+}
+
+export function getMissingAuthConfigVars(): string[] {
+  const missing: string[] = [];
+
+  if (!getAppPassword()) {
+    missing.push("APP_PASSWORD");
+  }
+
+  if (!getSessionSecret()) {
+    missing.push("SESSION_SECRET (or AUTH_SECRET)");
+  }
+
+  return missing;
 }
 
 /** Constant-time string equality to prevent timing attacks. */
