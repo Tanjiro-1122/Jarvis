@@ -41,12 +41,15 @@ export function Chat() {
       <form
         className="input-form"
         onSubmit={(e) => {
-          if (!input.trim() || isLoading) return;
+          if (!input.trim() || isLoading) {
+            e.preventDefault();
+            return;
+          }
           handleSubmit(e);
         }}
       >
         <input
-          name="prompt"
+          name="message"
           value={input}
           onChange={handleInputChange}
           placeholder="Ask Jarvis anything..."
