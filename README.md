@@ -1,6 +1,6 @@
 # Jarvis
 
-Jarvis is a Vercel-ready AI chatbot built with Next.js and the Vercel AI SDK, protected by a password gate so only authorized users can access it.
+Jarvis is a Vercel-ready AI chatbot built with Next.js and the Vercel AI SDK, protected by a password gate so only authorized users can access it. Conversations are persisted across sessions using Supabase.
 
 ## Features
 
@@ -8,6 +8,7 @@ Jarvis is a Vercel-ready AI chatbot built with Next.js and the Vercel AI SDK, pr
 - Streaming AI responses
 - Simple modern dark chat interface
 - Password-protected access (auth gate + session cookie)
+- **Persistent chat history across sessions** (Supabase)
 - Ready for Vercel deployment
 - Easy to customize
 
@@ -18,6 +19,7 @@ Jarvis is a Vercel-ready AI chatbot built with Next.js and the Vercel AI SDK, pr
 - [TypeScript](https://www.typescriptlang.org/)
 - [Vercel AI SDK](https://sdk.vercel.ai/)
 - OpenAI (`gpt-4o-mini`)
+- [Supabase](https://supabase.com/) (Postgres — for chat persistence)
 
 ## Getting Started
 
@@ -48,19 +50,61 @@ APP_PASSWORD=your_app_password_here
 # Generate one with: openssl rand -hex 32
 SESSION_SECRET=a_long_random_secret_string_here
 
-# Backward-compatible alias for older deployments:
-# AUTH_SECRET=a_long_random_secret_string_here
+# Supabase project URL and anon key — required for persistent chat history
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
-> **Important:** `APP_PASSWORD` and `SESSION_SECRET` are required. `AUTH_SECRET` is still supported as a legacy alias for `SESSION_SECRET`.
+> **Important:** `APP_PASSWORD` and `SESSION_SECRET` are required. `AUTH_SECRET` is still supported as a legacy alias for `SESSION_SECRET`.  
+> `SUPABASE_URL` and `SUPABASE_ANON_KEY` are optional — the app runs without them but chat history will not be persisted.
 
-### 3. Run locally
+### 3. Set up Supabase (for persistent history)
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Open the **SQL Editor** in the Supabase dashboard and run the following schema:
+
+```sql
+-- Stores one conversation per browser session
+create table conversations (
+  id   uuid primary key default gen_random_uuid(),
+  session_id text not null,
+  created_at timestamptz default now()
+);
+
+-- Stores every user/assistant message
+create table messages (
+  id              uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  role            text not null check (role in ('user', 'assistant')),
+  content         text not null,
+  created_at      timestamptz default now()
+);
+
+-- Indexes for fast history lookups
+create index on conversations(session_id, created_at);
+create index on messages(conversation_id, created_at);
+```
+
+3. In your Supabase project go to **Settings → API** and copy:
+   - **Project URL** → `SUPABASE_URL`
+   - **`anon` / `public` key** → `SUPABASE_ANON_KEY`
+
+> **Row-Level Security (RLS):** The app uses server-side API routes to talk to Supabase; the keys are never exposed to the browser. RLS can be left off for a private, password-protected app.
+
+### 4. Run locally
 
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). You will be redirected to the login page — enter the password you set in `APP_PASSWORD`.
+
+## How Persistent History Works
+
+- On first visit a random `sessionId` UUID is created and saved in `localStorage`.
+- When the chat page loads, Jarvis fetches prior messages for that session from Supabase (`/api/history`) and restores them to the chat.
+- After every exchange, the new user message and Jarvis's response are saved to Supabase so they appear on the next visit.
+- Clearing browser `localStorage` (or using a different browser) starts a fresh conversation.
 
 ## Password Protection
 
@@ -90,15 +134,20 @@ jarvis/
 │  │  │  │  └─ route.ts     # Validates password, sets session cookie
 │  │  │  └─ logout/
 │  │  │     └─ route.ts     # Clears session cookie
-│  │  └─ chat/
-│  │     └─ route.ts        # Streaming chat API route
+│  │  ├─ chat/
+│  │  │  └─ route.ts        # Streaming chat API route (saves messages)
+│  │  └─ history/
+│  │     └─ route.ts        # Returns conversation history for a session
 │  ├─ login/
 │  │  └─ page.tsx           # Login page
 │  ├─ globals.css            # Global styles (dark theme)
 │  ├─ layout.tsx             # Root layout with metadata
 │  └─ page.tsx               # Home page (protected)
 ├─ components/
-│  └─ chat.tsx               # Chat UI component (with logout button)
+│  └─ chat.tsx               # Chat UI component (loads history, logout button)
+├─ lib/
+│  ├─ auth.ts                # Auth helpers (token, password, session secret)
+│  └─ supabase.ts            # Server-side Supabase client
 ├─ middleware.ts              # Route protection middleware
 ├─ .env.example              # Environment variable template
 ├─ next-env.d.ts
@@ -116,6 +165,8 @@ jarvis/
    - `OPENAI_API_KEY` — your OpenAI API key
    - `APP_PASSWORD` — required password for login
    - `SESSION_SECRET` — required session signing secret (generate with `openssl rand -hex 32`)
+   - `SUPABASE_URL` — your Supabase project URL
+   - `SUPABASE_ANON_KEY` — your Supabase anon/public key
    - (`AUTH_SECRET` is an optional legacy alias for `SESSION_SECRET`)
 5. Save the variables for the **Production** environment.
 6. Redeploy the app (or trigger a new production deployment) so the new env vars are applied.
@@ -142,10 +193,11 @@ Click the **📎** button in the chat input to select one or more files. A previ
 ### Notes
 - `gpt-4o-mini` supports image inputs natively. Images are base64-encoded in the browser and sent as multimodal content via the Vercel AI SDK's `experimental_attachments` API.
 - Unsupported file types (e.g. PDFs) are blocked on the client so they never reach the server, avoiding model errors.
+- Attachments are not persisted to Supabase (only the text content of messages is stored).
 
 ## Customization Ideas
 
-- Add conversation history persistence with a database
+- Add multiple conversations / conversation switcher
 - Add multiple AI model support
 - Add markdown rendering for assistant responses
 - Add voice input/output
@@ -153,3 +205,4 @@ Click the **📎** button in the chat input to select one or more files. A previ
 ## Notes
 
 The API route uses `gpt-4o-mini` by default. You can change the model in `app/api/chat/route.ts`.
+

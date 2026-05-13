@@ -18,12 +18,61 @@ const ACCEPTED_TYPES = [
 
 export function Chat() {
   const router = useRouter();
-  const { messages, input, handleInputChange, handleSubmit, status } =
-    useChat();
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  const { messages, input, handleInputChange, handleSubmit, status, setMessages } =
+    useChat({ body: { conversationId } });
+
   const [files, setFiles] = useState<FileList | undefined>();
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [fileError, setFileError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load or create a session ID and fetch conversation history on mount.
+  useEffect(() => {
+    let sessionId = localStorage.getItem("jarvis_session_id");
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem("jarvis_session_id", sessionId);
+    }
+
+    fetch(`/api/history?sessionId=${encodeURIComponent(sessionId)}`)
+      .then((r) => r.json())
+      .then(
+        ({
+          conversationId: convId,
+          messages: history,
+        }: {
+          conversationId: string | null;
+          messages: { id: string; role: string; content: string }[];
+        }) => {
+          setConversationId(convId);
+          if (history.length > 0) {
+            setMessages(
+              history.map((m) => ({
+                id: m.id,
+                role: m.role as "user" | "assistant",
+                content: m.content,
+                parts: [{ type: "text" as const, text: m.content }],
+              }))
+            );
+          }
+        }
+      )
+      .catch(() => {
+        // History unavailable — continue without persistence.
+      })
+      .finally(() => {
+        setHistoryLoaded(true);
+      });
+  }, [setMessages]);
+
+  // Scroll to the latest message whenever messages change.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -110,7 +159,11 @@ export function Chat() {
         </button>
       </div>
       <div className="messages">
-        {messages.length === 0 ? (
+        {!historyLoaded ? (
+          <div className="empty-state">
+            <p>Loading…</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="empty-state">
             <h2>Hello, I&apos;m Jarvis.</h2>
             <p>How can I help you today?</p>
@@ -155,6 +208,7 @@ export function Chat() {
             </div>
           ))
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {files != null && files.length > 0 && (
