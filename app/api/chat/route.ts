@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getSupabaseClient } from "@/lib/supabase";
 
-export const maxDuration = 60;
+export const maxDuration = 60; // Multi-step agent execution requires up to 60 s; needs Vercel Pro or higher.
 
 // ─── Safe math expression evaluator ─────────────────────────────────────────
 // A simple recursive-descent parser that evaluates arithmetic expressions

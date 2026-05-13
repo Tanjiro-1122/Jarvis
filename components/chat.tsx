@@ -25,7 +25,7 @@ const TOOL_LABELS: Record<string, string> = {
   create_task_plan: "Planning task",
 };
 
-function toolLabel(name: string) {
+function getToolLabel(name: string) {
   return TOOL_LABELS[name] ?? `Running ${name.replace(/_/g, " ")}`;
 }
 
@@ -150,7 +150,7 @@ function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
     <div className={`tool-card ${isPending ? "tool-card--pending" : ""}`}>
       <div className="tool-card-header">
         <span className="tool-card-icon">{isPending ? "⚙️" : "✅"}</span>
-        <span className="tool-card-title">{toolLabel(invocation.toolName)}</span>
+        <span className="tool-card-title">{getToolLabel(invocation.toolName)}</span>
         {isPending && <span className="tool-spinner" />}
       </div>
     </div>
@@ -245,7 +245,7 @@ export function Chat() {
               .toolInvocation.state !== "result"
         );
         if (!pending) return null;
-        return toolLabel(
+        return getToolLabel(
           (
             pending as {
               type: string;
