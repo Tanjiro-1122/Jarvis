@@ -465,7 +465,12 @@ export function Chat() {
         {showTypingIndicator && (
           <div className="message assistant message--typing">
             <div className="message-role">Jarvis</div>
-            <div className="typing-indicator" aria-label="Jarvis is thinking">
+            <div
+              className="typing-indicator"
+              role="status"
+              aria-live="polite"
+              aria-label="Jarvis is thinking"
+            >
               <span />
               <span />
               <span />
@@ -521,7 +526,15 @@ export function Chat() {
             className="file-input-hidden"
           />
         </label>
+        <label htmlFor="chat-message-input" className="sr-only">
+          Message input
+        </label>
+        <span id="chat-input-help" className="sr-only">
+          Press Enter to send. Press Shift plus Enter for a new line.
+        </span>
         <textarea
+          id="chat-message-input"
+          aria-describedby="chat-input-help"
           name="message"
           value={input}
           onChange={handleInputChange}
