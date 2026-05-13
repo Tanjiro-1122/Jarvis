@@ -215,7 +215,7 @@ function isCalculationIntent(input: string) {
     /\b(calculate|compute|what is|solve|tip|percentage|percent|sum|total|convert)\b/i.test(
       input
     ) &&
-    /[\d()%/*+\-]/.test(input)
+    /[\d()%/*+-]/.test(input)
   );
 }
 

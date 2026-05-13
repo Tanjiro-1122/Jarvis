@@ -315,9 +315,7 @@ function getSafeAttachmentImageUrl(
 
   try {
     const parsed = new URL(url);
-    return allowedProtocols.includes(parsed.protocol as (typeof allowedProtocols)[number])
-      ? url
-      : undefined;
+    return allowedProtocols.some((protocol) => parsed.protocol === protocol) ? url : undefined;
   } catch {
     return undefined;
   }
@@ -1359,16 +1357,9 @@ export function Chat() {
           <div className="attachment-preview">
             {Array.from(files).map((file, idx) => (
               <div key={idx} className="attachment-preview-item">
-                {file.type.startsWith("image/") &&
-                getSafeAttachmentImageUrl(previewUrls[idx], ["blob:"]) ? (
-                  <img
-                    src={getSafeAttachmentImageUrl(previewUrls[idx], ["blob:"]) ?? ""}
-                    alt={file.name}
-                    className="attachment-preview-img"
-                  />
-                ) : (
-                  <span className="attachment-preview-file">📎 {file.name}</span>
-                )}
+                <span className="attachment-preview-file">
+                  {file.type.startsWith("image/") ? "🖼️" : "📎"} {file.name}
+                </span>
               </div>
             ))}
             <button

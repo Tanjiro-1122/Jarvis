@@ -211,9 +211,10 @@ function getSchemaNotice(message: string) {
 }
 
 function sanitizeText(input: string, maxChars = MAX_STORED_TEXT_CHARS) {
+  const truncationSuffix = "\n\n[truncated for storage]";
   const trimmed = input.replace(/\u0000/g, "").trim();
   if (trimmed.length <= maxChars) return trimmed;
-  return `${trimmed.slice(0, maxChars)}\n\n[truncated for storage]`;
+  return `${trimmed.slice(0, Math.max(0, maxChars - truncationSuffix.length))}${truncationSuffix}`;
 }
 
 function summarizeText(input: string, maxChars = 180) {
@@ -229,7 +230,7 @@ function tokenize(text: string) {
     new Set(
       text
         .toLowerCase()
-        .match(/[a-z0-9_./#-]{2,}/g)
+        .match(/[a-z0-9._-]{2,}/g)
         ?.filter((token) => token.length > 2 && /[a-z0-9]/.test(token)) ?? []
     )
   );
