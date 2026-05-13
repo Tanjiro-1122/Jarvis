@@ -2,6 +2,7 @@
 
 import { useChat } from "ai/react";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -16,12 +17,19 @@ const ACCEPTED_TYPES = [
 ];
 
 export function Chat() {
+  const router = useRouter();
   const { messages, input, handleInputChange, handleSubmit, status } =
     useChat();
   const [files, setFiles] = useState<FileList | undefined>();
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [fileError, setFileError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   const isLoading = status === "submitted" || status === "streaming";
 
@@ -95,6 +103,12 @@ export function Chat() {
 
   return (
     <div className="chat">
+      <div className="chat-header">
+        <span className="chat-header-title">Jarvis</span>
+        <button className="logout-button" onClick={handleLogout}>
+          Sign out
+        </button>
+      </div>
       <div className="messages">
         {messages.length === 0 ? (
           <div className="empty-state">
