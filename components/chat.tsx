@@ -458,6 +458,19 @@ const PROJECT_MEMORY_OPTIONS = [
   ...PROJECT_SWITCHBOARD_OPTIONS.map((project) => ({ key: project.key, label: project.label })),
 ];
 
+
+type CabinetDrawerKey = "memory" | "health" | "repo" | "build" | "activity" | "files" | "tasks";
+
+const CABINET_DRAWERS: Array<{ key: CabinetDrawerKey; label: string; hint: string }> = [
+  { key: "memory", label: "Memory", hint: "Facts + rules" },
+  { key: "health", label: "Health", hint: "Setup checks" },
+  { key: "repo", label: "Repo", hint: "Approvals" },
+  { key: "build", label: "Build", hint: "GitHub + Vercel" },
+  { key: "activity", label: "Activity", hint: "Audit trail" },
+  { key: "files", label: "Files", hint: "Artifacts + docs" },
+  { key: "tasks", label: "Tasks", hint: "Timeline" },
+];
+
 function dedupeMessages<T extends { id?: string; role?: string; content?: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   const result: T[] = [];
@@ -910,6 +923,7 @@ export function Chat() {
   const [deployHealth, setDeployHealth] = useState<DeployHealthSnapshot | null>(null);
   const [deployHealthBusy, setDeployHealthBusy] = useState(false);
   const [deployHealthStatus, setDeployHealthStatus] = useState("");
+  const [activeCabinetDrawer, setActiveCabinetDrawer] = useState<CabinetDrawerKey>("memory");
 
   const {
     messages,
@@ -2204,7 +2218,27 @@ export function Chat() {
               </div>
             </div>
 
-            <div className="context-panel-section memory-panel-section">
+            <div className="filing-cabinet-drawers" aria-label="Jarvis filing cabinet sections">
+              {CABINET_DRAWERS.map((drawer) => (
+                <button
+                  key={drawer.key}
+                  type="button"
+                  className={`filing-cabinet-tab ${activeCabinetDrawer === drawer.key ? "filing-cabinet-tab--active" : ""}`}
+                  onClick={() => setActiveCabinetDrawer(drawer.key)}
+                >
+                  <span>{drawer.label}</span>
+                  <small>{drawer.hint}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="filing-cabinet-active-label">
+              <span>Open drawer</span>
+              <strong>{CABINET_DRAWERS.find((drawer) => drawer.key === activeCabinetDrawer)?.label}</strong>
+            </div>
+
+            {activeCabinetDrawer === "memory" && (
+            <div className="context-panel-section memory-panel-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Memory core</div>
@@ -2325,8 +2359,10 @@ export function Chat() {
                 </div>
               )}
             </div>
+            )}
 
-            <div className="context-panel-section deploy-health-section">
+            {activeCabinetDrawer === "health" && (
+            <div className="context-panel-section deploy-health-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Deploy health</div>
@@ -2369,8 +2405,10 @@ export function Chat() {
               )}
               {deployHealthStatus && <p className="memory-status">{deployHealthStatus}</p>}
             </div>
+            )}
 
-            <div className="context-panel-section repo-control-section">
+            {activeCabinetDrawer === "repo" && (
+            <div className="context-panel-section repo-control-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Repo control</div>
@@ -2470,8 +2508,10 @@ export function Chat() {
                 </div>
               )}
             </div>
+            )}
 
-            <div className="context-panel-section build-intel-section">
+            {activeCabinetDrawer === "build" && (
+            <div className="context-panel-section build-intel-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Build intelligence</div>
@@ -2554,8 +2594,10 @@ export function Chat() {
               )}
               {buildIntelStatus && <p className="memory-status">{buildIntelStatus}</p>}
             </div>
+            )}
 
-            <div className="context-panel-section action-log-section">
+            {activeCabinetDrawer === "activity" && (
+            <div className="context-panel-section action-log-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Activity log</div>
@@ -2605,8 +2647,11 @@ export function Chat() {
                 </div>
               )}
             </div>
+            )}
 
-            <div className="context-panel-section">
+            {activeCabinetDrawer === "files" && (
+            <>
+            <div className="context-panel-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Artifacts</div>
@@ -2666,8 +2711,11 @@ export function Chat() {
                 </div>
               )}
             </div>
+            </>
+            )}
 
-            <div className="context-panel-section">
+            {activeCabinetDrawer === "tasks" && (
+            <div className="context-panel-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Task timeline</div>
@@ -2720,8 +2768,11 @@ export function Chat() {
                 </div>
               )}
             </div>
+            )}
 
-            <div className="context-panel-section">
+            {activeCabinetDrawer === "files" && (
+            <>
+            <div className="context-panel-section filing-cabinet-content">
               <div className="context-panel-header">
                 <div>
                   <div className="side-section-label">Project files</div>
@@ -2794,6 +2845,8 @@ export function Chat() {
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
         </aside>
       )}
