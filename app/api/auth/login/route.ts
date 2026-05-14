@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   computeToken,
@@ -5,9 +6,9 @@ import {
   getMissingAuthConfigVars,
   getSessionSecret,
   safeEqual,
+  SESSION_COOKIE,
 } from "@/lib/auth";
 
-const SESSION_COOKIE = "jarvis_session";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export async function POST(req: NextRequest) {
@@ -42,10 +43,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid password." }, { status: 401 });
   }
 
-  const token = await computeToken(sessionSecret);
+  const nonce = randomBytes(16).toString("hex");
+  const token = await computeToken(sessionSecret, nonce);
+  const cookieValue = `${nonce}.${token}`; // "nonce.hmac" — scopes this session uniquely
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, token, {
+  response.cookies.set(SESSION_COOKIE, cookieValue, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

@@ -1,8 +1,12 @@
+/** Single source of truth for the session cookie name. */
+export const SESSION_COOKIE = "jarvis_session" as const;
+
 /**
- * Computes a deterministic HMAC-SHA-256 token from the session signing secret.
+ * Computes an HMAC-SHA-256 token scoped to the given nonce.
+ * Each login generates a fresh nonce so no two sessions share the same cookie value.
  * Compatible with both the Edge (middleware) and Node.js (API route) runtimes.
  */
-export async function computeToken(secret: string): Promise<string> {
+export async function computeToken(secret: string, nonce: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -14,7 +18,7 @@ export async function computeToken(secret: string): Promise<string> {
   const signature = await crypto.subtle.sign(
     "HMAC",
     key,
-    encoder.encode("jarvis:authenticated")
+    encoder.encode(`jarvis:authenticated:${nonce}`)
   );
   return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, "0"))

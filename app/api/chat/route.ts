@@ -118,9 +118,14 @@ function tokenize(raw: string): (number | string)[] {
 
     // Number literal (including decimals)
     if (/\d/.test(c) || (c === "." && /\d/.test(src[i + 1] ?? ""))) {
-      let num = "";
-      while (i < src.length && /[\d.]/.test(src[i])) num += src[i++];
-      tokens.push(parseFloat(num));
+      // Use a validated regex so that "1.2.3" is rejected rather than silently
+      // becoming NaN.  The pattern matches an integer or a single-decimal float.
+      const numMatch = src.slice(i).match(/^\d+(\.\d+)?/);
+      if (!numMatch) throw new Error(`Invalid number literal at position ${i}`);
+      const parsed = parseFloat(numMatch[0]);
+      if (!isFinite(parsed)) throw new Error(`Invalid number literal: "${numMatch[0]}"`);
+      tokens.push(parsed);
+      i += numMatch[0].length;
       continue;
     }
 
@@ -353,6 +358,37 @@ function sanitizeAttachmentName(name: string | undefined) {
     .replace(/\s+/g, " ")
     .trim();
   return cleaned || "file";
+}
+
+/**
+ * Validates whether an image URL is safe to forward to the AI model.
+ *
+ * When JARVIS_ALLOWED_IMAGE_HOSTS is set (comma-separated hostnames) only those
+ * hosts are accepted.  Without that variable any well-formed HTTPS URL is
+ * allowed — operators should set the allowlist in production to prevent
+ * arbitrary external URLs (tracker pixels, oversized images, etc.) from being
+ * sent to the model.
+ */
+function isSafeImageUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+
+  const allowedHostsEnv = process.env.JARVIS_ALLOWED_IMAGE_HOSTS;
+  if (allowedHostsEnv) {
+    const allowedHosts = new Set(
+      allowedHostsEnv.split(",").map((h) => h.trim()).filter(Boolean)
+    );
+    return allowedHosts.has(parsed.hostname);
+  }
+
+  // No allowlist configured — permit any HTTPS URL.
+  // Set JARVIS_ALLOWED_IMAGE_HOSTS to restrict to trusted hosts in production.
+  return true;
 }
 
 const baseAgentTools = {
@@ -701,8 +737,8 @@ const baseAgentTools = {
 
         const decodedContent = Buffer.from(data.content, "base64").toString("utf-8");
         return { success: true, path, content: decodedContent };
-      } catch (error: any) {
-        return { success: false, error: error.message };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
       }
     },
   }),
@@ -738,8 +774,8 @@ const baseAgentTools = {
           .map((item) => item.path);
 
         return { success: true, defaultBranch, files: filePaths };
-      } catch (error: any) {
-        return { success: false, error: error.message };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
       }
     },
   }),
@@ -790,65 +826,60 @@ export async function POST(req: Request) {
   let requestConversationId: string | undefined;
   let activeTaskId: string | null = null;
   try {
-    const {
-      messages,
-      sessionId,
-      conversationId,
-      workspaceId,
-      resumeTaskId,
-    }: {
-      messages: UIMessage[];
-      sessionId?: string;
-      conversationId?: string;
-      workspaceId?: string;
-      resumeTaskId?: string;
-    } =
-      await req.json();
-    const formattedMessages = messages.map((msg: any) => {
-      if (msg.role !== "user" || typeof msg.content !== "string") {
-        return msg;
-      }
-
-      const imageRegex = /!\[[^\]]{0,1000}\]\((https?:\/\/[^\s)]{1,4096})\)/g;
-      const matches = [...msg.content.matchAll(imageRegex)];
-
-      if (matches.length === 0) {
-        return msg;
-      }
-
-      const cleanText = msg.content.replace(imageRegex, "").trim();
-      const contentArray: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [];
-
-      if (cleanText) {
-        contentArray.push({ type: "text", text: cleanText });
-      }
-
-      matches.forEach((match) => {
-        contentArray.push({
-          type: "image",
-          image: match[1],
-        });
-      });
-
-      return {
-        ...msg,
-        content: contentArray,
-      };
+    // ── Runtime validation ────────────────────────────────────────────────────
+    // Validate the request body before touching any state (rate-limiter map,
+    // workspace events, etc.) so malformed input is rejected early.
+    const ChatBodySchema = z.object({
+      messages: z.array(z.any()).min(1),
+      sessionId: z.string().min(1).max(MAX_SESSION_ID_LENGTH).optional(),
+      conversationId: z.string().uuid().optional(),
+      workspaceId: z.string().uuid().optional(),
+      resumeTaskId: z.string().uuid().optional(),
     });
-    requestSessionId = sessionId ?? null;
-    requestWorkspaceId = workspaceId;
-    requestConversationId = conversationId;
 
-    if (!sessionId || sessionId.length > MAX_SESSION_ID_LENGTH) {
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: "Invalid sessionId." }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "Invalid request body." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
+    const parsed = ChatBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request body." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const { messages: rawMessages, sessionId, conversationId, workspaceId, resumeTaskId } = parsed.data;
+    const messages = rawMessages as UIMessage[];
+
+    // sessionId is required for rate-limiting and workspace access
+    if (!sessionId) {
+      return new Response(
+        JSON.stringify({ error: "Invalid sessionId." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Assign tracking variables now that input is validated
+    requestSessionId = sessionId;
+    requestWorkspaceId = workspaceId;
+    requestConversationId = conversationId;
+
+    // ── Rate limiting ─────────────────────────────────────────────────────────
+    // NOTE: This in-memory rate limiter is effective only within a single
+    // serverless instance. On platforms like Vercel, each cold start or new
+    // instance resets the counter, making it bypassable under load. For
+    // production deployments, replace chatRateWindow with an external atomic
+    // store (e.g. Upstash Redis / Vercel KV) and set UPSTASH_REDIS_REST_URL +
+    // UPSTASH_REDIS_REST_TOKEN. The structure below is intentionally isolated
+    // so the external store can be plugged in by replacing the four lines that
+    // read/write chatRateWindow.
     const now = Date.now();
     cleanupRateWindow(now);
     const recentRequests =
@@ -872,6 +903,48 @@ export async function POST(req: Request) {
     }
     recentRequests.push(now);
     chatRateWindow.set(sessionId, recentRequests);
+
+    // ── Message preprocessing ─────────────────────────────────────────────────
+    // Extract markdown image URLs from user messages and attach them as AI SDK
+    // image blocks. Only HTTPS URLs that pass isSafeImageUrl() are forwarded to
+    // the model; all others are silently dropped to prevent tracker pixels,
+    // internal metadata endpoints, or oversized images from inflating token counts.
+    const formattedMessages = messages.map((msg: UIMessage) => {
+      if (msg.role !== "user" || typeof msg.content !== "string") {
+        return msg;
+      }
+
+      const imageRegex = /!\[[^\]]{0,1000}\]\((https?:\/\/[^\s)]{1,4096})\)/g;
+      const matches = [...msg.content.matchAll(imageRegex)];
+
+      if (matches.length === 0) {
+        return msg;
+      }
+
+      const cleanText = msg.content.replace(imageRegex, "").trim();
+      const contentArray: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [];
+
+      if (cleanText) {
+        contentArray.push({ type: "text", text: cleanText });
+      }
+
+      matches.forEach((match) => {
+        const imageUrl = match[1];
+        if (isSafeImageUrl(imageUrl)) {
+          contentArray.push({ type: "image", image: imageUrl });
+        }
+      });
+
+      // If all content was stripped (e.g. only unsafe image URLs), preserve text
+      if (contentArray.length === 0 && cleanText === "" && msg.content) {
+        return { ...msg, content: msg.content.replace(imageRegex, "").trim() || msg.content };
+      }
+
+      return {
+        ...msg,
+        content: contentArray,
+      };
+    });
 
     if (workspaceId) {
       await assertWorkspaceAccess({
@@ -1019,8 +1092,12 @@ ${retrievalHits
 
     const agentTools = getAgentTools({ workspaceId, conversationId });
 
+    // Allow the chat model to be overridden via environment variable so the
+    // deployment can switch to a newer or cheaper model without a code change.
+    const CHAT_MODEL = process.env.JARVIS_CHAT_MODEL ?? "gpt-4o-mini";
+
     const result = streamText({
-      model: openai("gpt-4o-mini"),
+      model: openai(CHAT_MODEL),
       system: `You are Jarvis, a self-healing autonomous workspace developer agent. You are intelligent, capable, and methodical.
 
 ## Self-Healing Operating Procedure
@@ -1083,7 +1160,7 @@ ${plannerOutput.steps
 ### Formatting
 - Format responses in Markdown: **bold**, \`code\`, lists, headers, fenced code blocks
 - Be thorough yet concise. Prioritize accuracy and practical value.`,
-      messages: convertToCoreMessages(formattedMessages),
+      messages: convertToCoreMessages(formattedMessages as unknown as UIMessage[]),
       tools: agentTools,
       toolChoice: forcedToolChoice ?? "auto",
       maxSteps: 5,
@@ -1154,6 +1231,20 @@ ${plannerOutput.steps
             responseChars: (text ?? "").length,
           },
         });
+      },
+      onError: ({ error }) => {
+        // Mid-stream errors cannot change the HTTP status (headers already sent
+        // as 200).  Log them so they appear in server logs / monitoring and the
+        // task failure path below can surface a retry prompt in the UI.
+        logError("api.chat.streamText.onError", error);
+        if (activeTaskId) {
+          const errMsg =
+            error instanceof Error
+              ? error.message
+              : "Streaming error after headers sent.";
+          failWorkspaceTask(activeTaskId, errMsg).catch(() => {});
+          activeTaskId = null;
+        }
       },
     });
 
