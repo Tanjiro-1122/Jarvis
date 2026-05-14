@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const SESSION_COOKIE = "jarvis_session";
+import { SESSION_COOKIE } from "@/lib/auth";
 
 export async function POST() {
   const response = NextResponse.json({ ok: true });

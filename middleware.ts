@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { computeToken, getSessionSecret, safeEqual } from "@/lib/auth";
+import { computeToken, getSessionSecret, safeEqual, SESSION_COOKIE } from "@/lib/auth";
 
-const SESSION_COOKIE = "jarvis_session";
-
-async function verifyToken(token: string, secret: string): Promise<boolean> {
-  const expected = await computeToken(secret);
-  return safeEqual(token, expected);
+async function verifyToken(cookieValue: string, secret: string): Promise<boolean> {
+  const dotIndex = cookieValue.indexOf(".");
+  if (dotIndex === -1) return false; // legacy fixed-token format — reject
+  const nonce = cookieValue.slice(0, dotIndex);
+  const provided = cookieValue.slice(dotIndex + 1);
+  if (!nonce || !provided) return false;
+  const expected = await computeToken(secret, nonce);
+  return safeEqual(provided, expected);
 }
 
 export async function middleware(request: NextRequest) {
