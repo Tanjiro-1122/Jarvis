@@ -2213,64 +2213,155 @@ export function Chat() {
               <p>Loading workspace…</p>
             </div>
           ) : messages.length === 0 ? (
-            <div className="empty-state empty-state--workspace">
-              <h2>Work inside {selectedWorkspace?.name ?? "Jarvis"}</h2>
-              <p className="empty-state-copy">
-                Jarvis keeps project chats, uploaded text/code files, generated
-                artifacts, and retrieved context grouped together here.
-              </p>
-              <div className="capability-pills">
-                <span className="pill">Workspace retrieval</span>
-                <span className="pill">Persistent artifacts</span>
-                <span className="pill">Web search</span>
-                <span className="pill">GitHub analysis</span>
-                <span className="pill">Code execution</span>
-                <span className="pill">File analysis</span>
-              </div>
-              <div className="starter-actions">
-                <button
-                  type="button"
-                  className="starter-button"
-                  onClick={() =>
-                    fillStarterPrompt("Search the web for the latest news in AI today.")
-                  }
-                >
-                  Latest AI news
-                </button>
-                <button
-                  type="button"
-                  className="starter-button"
-                  onClick={() =>
-                    fillStarterPrompt(
-                      "Analyze the GitHub repository vercel/next.js and summarize its purpose, structure, and key features."
-                    )
-                  }
-                >
-                  Analyze a repo
-                </button>
-                <button
-                  type="button"
-                  className="starter-button"
-                  onClick={() =>
-                    fillStarterPrompt(
-                      "Run a TypeScript snippet that creates a CSV artifact summarizing quarterly revenue."
-                    )
-                  }
-                >
-                  Generate an artifact
-                </button>
-                <button
-                  type="button"
-                  className="starter-button"
-                  onClick={() =>
-                    fillStarterPrompt(
-                      "Review the uploaded document and answer questions using prior workspace context."
-                    )
-                  }
-                >
-                  Use retrieved context
-                </button>
-              </div>
+            <div className="command-center-home">
+              <section className="command-hero-card">
+                <div className="command-kicker">Saving Grace is online</div>
+                <h2>What should Jarvis handle next?</h2>
+                <p className="empty-state-copy">
+                  A private command center for memory, files, tasks, repo control,
+                  runner jobs, and build intelligence — scoped to {selectedWorkspace?.name ?? "this workspace"}.
+                </p>
+                <div className="command-primary-actions">
+                  <button
+                    type="button"
+                    className="command-action-card command-action-card--primary"
+                    onClick={() =>
+                      fillStarterPrompt(
+                        "Audit this Jarvis workspace honestly. Separate verified features, partially wired features, missing setup, and next improvements. Do not change code."
+                      )
+                    }
+                  >
+                    <span>Run honest audit</span>
+                    <small>Check what is real vs. still wired in progress</small>
+                  </button>
+                  <button
+                    type="button"
+                    className="command-action-card"
+                    onClick={() =>
+                      fillStarterPrompt(
+                        "Queue a safe background job to review this workspace and prepare the next practical improvement plan. Do not modify files."
+                      )
+                    }
+                  >
+                    <span>Queue planning job</span>
+                    <small>Use the task system without touching code</small>
+                  </button>
+                  <button
+                    type="button"
+                    className="command-action-card"
+                    onClick={() => setShowInfoSidebar(true)}
+                  >
+                    <span>Open filing cabinet</span>
+                    <small>Memory, repo control, files, activity, tasks</small>
+                  </button>
+                </div>
+              </section>
+
+              <section className="command-metrics-grid" aria-label="Workspace status overview">
+                <div className="command-metric-card">
+                  <span>Tasks</span>
+                  <strong>{tasks.length}</strong>
+                  <small>{tasks.filter((task) => task.status === "queued" || task.status === "running").length} active</small>
+                </div>
+                <div className="command-metric-card">
+                  <span>Files</span>
+                  <strong>{projectFiles.length + documents.length}</strong>
+                  <small>{artifacts.length} artifacts</small>
+                </div>
+                <div className="command-metric-card">
+                  <span>Proposals</span>
+                  <strong>{repoProposals.length}</strong>
+                  <small>{repoProposals.filter((proposal) => proposal.status === "approved" || proposal.status === "proposed").length} open</small>
+                </div>
+                <div className="command-metric-card">
+                  <span>Memory</span>
+                  <strong>{memories.length}</strong>
+                  <small>{persistenceEnabled && schemaReady ? "persistent" : "needs setup"}</small>
+                </div>
+              </section>
+
+              <section className="command-board-grid">
+                <div className="command-board-card">
+                  <div className="command-board-header">
+                    <span>Recent work</span>
+                    <button type="button" onClick={handleNewChat}>New chat</button>
+                  </div>
+                  {selectedWorkspace?.conversations.length ? (
+                    <div className="command-list">
+                      {selectedWorkspace.conversations.slice(0, 4).map((conversation) => (
+                        <button
+                          key={conversation.id}
+                          type="button"
+                          className="command-list-row"
+                          onClick={() => handleConversationSelect(conversation.id)}
+                        >
+                          <span>{conversation.title}</span>
+                          <small>{formatTimestamp(conversation.updatedAt)}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="command-muted">No recent threads yet. Start with an audit or queue a planning job.</p>
+                  )}
+                </div>
+
+                <div className="command-board-card">
+                  <div className="command-board-header">
+                    <span>Active jobs</span>
+                    <button type="button" onClick={() => { setActiveCabinetDrawer("tasks"); setShowInfoSidebar(true); }}>Tasks</button>
+                  </div>
+                  {tasks.length ? (
+                    <div className="command-list">
+                      {tasks.slice(0, 4).map((task) => (
+                        <div key={task.id} className="command-list-row command-list-row--static">
+                          <span>{task.title}</span>
+                          <small>{getTaskStatusLabel(task.status)} · {task.progress}%</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="command-muted">No queued jobs yet. Use Queue beside the command bar when you want durable work.</p>
+                  )}
+                </div>
+
+                <div className="command-board-card">
+                  <div className="command-board-header">
+                    <span>Repo control</span>
+                    <button type="button" onClick={() => { setActiveCabinetDrawer("repo"); setShowInfoSidebar(true); }}>Repo</button>
+                  </div>
+                  {repoProposals.length ? (
+                    <div className="command-list">
+                      {repoProposals.slice(0, 4).map((proposal) => (
+                        <div key={proposal.id} className="command-list-row command-list-row--static">
+                          <span>{proposal.title}</span>
+                          <small>{proposal.status} · {proposal.risk_level} risk</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="command-muted">No repo proposals waiting. Code changes stay gated behind approval.</p>
+                  )}
+                </div>
+
+                <div className="command-board-card">
+                  <div className="command-board-header">
+                    <span>Activity</span>
+                    <button type="button" onClick={() => { setActiveCabinetDrawer("activity"); setShowInfoSidebar(true); }}>Log</button>
+                  </div>
+                  {actionEvents.length ? (
+                    <div className="command-list">
+                      {actionEvents.slice(0, 4).map((event) => (
+                        <div key={event.id} className="command-list-row command-list-row--static">
+                          <span>{event.summary}</span>
+                          <small>{event.status} · {formatTimestamp(event.created_at)}</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="command-muted">Activity will appear after memory, job, repo, and diagnostic actions.</p>
+                  )}
+                </div>
+              </section>
             </div>
           ) : (
             messages.map((message) => {
@@ -2299,7 +2390,9 @@ export function Chat() {
                   )}
                 </div>
                 <div className="message-content">
-                  {message.parts.map((part, index) => {
+                  {(() => {
+                    const seenToolCards = new Set<string>();
+                    return message.parts.map((part, index) => {
                     if (part.type === "text") {
                       if (message.role === "assistant") {
                         return (
@@ -2321,6 +2414,9 @@ export function Chat() {
                           toolInvocation: ToolInvocation;
                         }
                       ).toolInvocation;
+                      const toolSignature = `${invocation.toolName}:${invocation.state === "result" ? JSON.stringify(invocation.result ?? {}) : invocation.state}`;
+                      if (seenToolCards.has(toolSignature)) return null;
+                      seenToolCards.add(toolSignature);
                       return (
                         <ToolCallCard
                           key={`${message.id}-${index}`}
@@ -2330,7 +2426,8 @@ export function Chat() {
                     }
 
                     return null;
-                  })}
+                  });
+                  })()}
                 </div>
                 {message.role === "user" &&
                   message.experimental_attachments &&
