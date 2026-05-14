@@ -741,6 +741,7 @@ export function Chat() {
   const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
   const [artifactPreviewId, setArtifactPreviewId] = useState<string | null>(null);
   const [showInfoSidebar, setShowInfoSidebar] = useState(false);
+  const [chatErrorMessage, setChatErrorMessage] = useState("");
 
   const {
     messages,
@@ -750,7 +751,17 @@ export function Chat() {
     status,
     setMessages,
     setInput,
-  } = useChat({ body: { sessionId, conversationId, workspaceId, resumeTaskId } });
+    error: chatError,
+  } = useChat({
+    body: { sessionId, conversationId, workspaceId, resumeTaskId },
+    onError: (error) => {
+      setChatErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Jarvis could not complete that response."
+      );
+    },
+  });
 
   const [files, setFiles] = useState<FileList | undefined>();
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -1166,6 +1177,7 @@ export function Chat() {
       e.preventDefault();
       return;
     }
+    setChatErrorMessage("");
     handleSubmit(e, {
       experimental_attachments: files,
       allowEmptySubmit: hasFiles && !input.trim(),
@@ -1621,6 +1633,15 @@ export function Chat() {
         )}
 
         {fileError && <div className="file-error">{fileError}</div>}
+        {(chatErrorMessage || chatError) && (
+          <div className="chat-error-banner" role="alert">
+            <strong>Jarvis paused.</strong>
+            <span>
+              {chatErrorMessage || chatError?.message ||
+                "Something interrupted the response. Try sending again."}
+            </span>
+          </div>
+        )}
 
         <form ref={formRef} className="input-form" onSubmit={handleFormSubmit}>
           <label className="attach-button" title="Attach image or text file">

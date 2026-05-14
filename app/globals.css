@@ -274,3 +274,151 @@ button { -webkit-tap-highlight-color: transparent; }
   .workspace-summary-bar { overflow-x: auto; flex-wrap: nowrap; }
   .empty-state { padding: 32px 16px; }
 }
+
+/* Jarvis polish pass — cleaner, calmer workspace shell */
+.workspace-home {
+  min-height: 100vh;
+  padding: clamp(14px, 2vw, 28px);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(112, 97, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 92% 8%, rgba(47, 213, 255, 0.12), transparent 28%),
+    linear-gradient(135deg, #070b16 0%, #090d19 50%, #080713 100%);
+}
+
+.workspace-shell {
+  max-width: 1480px;
+  margin: 0 auto;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 30px;
+  background: rgba(8, 12, 24, 0.72);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(24px);
+  overflow: hidden;
+}
+
+.workspace-sidebar,
+.context-sidebar,
+.chat-panel {
+  background: rgba(9, 14, 28, 0.58);
+}
+
+.workspace-sidebar { border-right: 1px solid rgba(148, 163, 184, 0.12); }
+.context-sidebar { border-left: 1px solid rgba(148, 163, 184, 0.12); }
+.workspace-brand-avatar { box-shadow: 0 12px 32px rgba(139, 92, 246, 0.35); }
+
+.workspace-field,
+.chat-input {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.workspace-field:focus,
+.chat-input:focus {
+  border-color: rgba(125, 211, 252, 0.55);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.09);
+}
+
+.workspace-create-button,
+.send-button {
+  border: 0;
+  background: linear-gradient(135deg, #38bdf8 0%, #8b5cf6 55%, #ec4899 100%);
+  box-shadow: 0 14px 34px rgba(139, 92, 246, 0.28);
+}
+
+.workspace-create-button:disabled,
+.send-button:disabled {
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.secondary-button,
+.logout-button,
+.attach-button {
+  background: rgba(15, 23, 42, 0.64);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: #dbeafe;
+}
+
+.workspace-notice,
+.workspace-error,
+.file-error,
+.chat-error-banner {
+  border-radius: 18px;
+  border: 1px solid rgba(251, 191, 36, 0.24);
+  background: rgba(251, 191, 36, 0.08);
+  color: #fde68a;
+}
+
+.chat-error-banner {
+  margin: 0 18px 12px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.chat-header {
+  background: rgba(9, 14, 28, 0.72);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.11);
+}
+
+.workspace-summary-bar {
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(9, 14, 28, 0.46);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+}
+
+.summary-chip,
+.status-badge {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.58);
+  color: #cbd5e1;
+}
+
+.messages {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.07), transparent 28%),
+    rgba(4, 8, 18, 0.58);
+}
+
+.message {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
+.message.user {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.92), rgba(168, 85, 247, 0.92));
+}
+
+.message.assistant {
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.input-form {
+  margin: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 22px;
+  background: rgba(8, 13, 26, 0.82);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+}
+
+.workspace-list-item,
+.conversation-list-item,
+.context-panel-section {
+  background: rgba(15, 23, 42, 0.48);
+  border: 1px solid rgba(148, 163, 184, 0.13);
+}
+
+.workspace-list-item--active,
+.conversation-list-item--active {
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(14, 116, 144, 0.13);
+}
+
+@media (max-width: 980px) {
+  .workspace-home { padding: 0; }
+  .workspace-shell { border-radius: 0; min-height: 100vh; }
+}

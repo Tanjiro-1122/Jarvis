@@ -1,17 +1,20 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Returns a fresh Supabase client for each call.
+ * Returns a fresh Supabase client for each server-side call.
  *
- * In serverless environments a module-level cached client can leak
- * authentication context across requests. Creating a new client per call is
- * safe because Supabase clients don't open a persistent TCP connection — the
- * cost is negligible. Returns null when SUPABASE_URL or SUPABASE_ANON_KEY are
- * not configured so the app continues to work without persistence.
+ * Jarvis manages authentication with its own password/session cookie, so all
+ * Supabase access happens from trusted Next.js server routes. Prefer the
+ * service-role key when it is available so private workspace writes are not
+ * blocked by Supabase row-level security. Fall back to the anon key only for
+ * local/dev setups that have not added a service key yet.
  */
 export function getSupabaseClient(): SupabaseClient | null {
   const url = process.env.SUPABASE_URL?.trim();
-  const key = process.env.SUPABASE_ANON_KEY?.trim();
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.SUPABASE_SECRET_KEY?.trim() ||
+    process.env.SUPABASE_ANON_KEY?.trim();
 
   if (!url || !key) return null;
 
