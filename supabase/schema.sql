@@ -160,6 +160,15 @@ create index if not exists workspace_events_workspace_id_created_at_idx
   on workspace_events(workspace_id, created_at desc);
 create index if not exists workspace_events_event_type_created_at_idx
   on workspace_events(event_type, created_at desc);
+alter table workspace_project_files
+  add column if not exists storage_bucket text,
+  add column if not exists storage_path text,
+  add column if not exists public_url text,
+  add column if not exists metadata jsonb not null default '{}'::jsonb;
+
+create index if not exists workspace_project_files_storage_path_idx
+  on workspace_project_files(storage_bucket, storage_path);
+
 create index if not exists workspace_project_files_workspace_id_updated_at_idx
   on workspace_project_files(workspace_id, updated_at desc);
 create index if not exists workspace_tasks_workspace_id_updated_at_idx

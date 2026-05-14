@@ -299,6 +299,10 @@ interface WorkspaceProjectFileSummary {
   mimeType: string;
   bytes: number;
   summary: string | null;
+  url?: string | null;
+  storageBucket?: string | null;
+  storagePath?: string | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1327,6 +1331,36 @@ export function Chat() {
   }
 
 
+  async function openStoredProjectFile(file: WorkspaceProjectFileSummary) {
+    try {
+      setFileError("");
+      if (!file.storagePath) {
+        if (file.url) {
+          window.open(file.url, "_blank", "noopener,noreferrer");
+          return;
+        }
+        throw new Error("This file does not have storage metadata yet.");
+      }
+
+      const response = await fetch("/api/files/signed-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectFileId: file.id,
+          workspaceId,
+          conversationId,
+          sessionId,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; url?: string };
+      if (!response.ok || !payload.url) throw new Error(payload.error ?? "Failed to open stored file.");
+      window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Failed to open stored file.");
+    }
+  }
+
+
   async function refreshDeployHealth() {
     setDeployHealthBusy(true);
     setDeployHealthStatus("");
@@ -1783,6 +1817,9 @@ export function Chat() {
 
         const formData = new FormData();
         formData.append("file", file);
+        if (workspaceId) formData.append("workspaceId", workspaceId);
+        if (conversationId) formData.append("conversationId", conversationId);
+        if (sessionId) formData.append("sessionId", sessionId);
 
         try {
           const res = await fetch("/api/upload", {
@@ -1792,10 +1829,7 @@ export function Chat() {
 
           if (!res.ok) {
             const payload = await res.json().catch(() => ({})) as { error?: string };
-            const msg =
-              res.status === 501
-                ? "Image upload is not configured in this deployment."
-                : payload.error ?? `Upload failed with status ${res.status}`;
+            const msg = payload.error ?? `Upload failed with status ${res.status}`;
             throw new Error(msg);
           }
 
@@ -3037,6 +3071,18 @@ export function Chat() {
                       <div className="document-meta">
                         {file.path} · {file.mimeType} · {file.bytes} bytes
                       </div>
+                      {file.storagePath && (
+                        <div className="document-meta">Stored: {file.storageBucket ?? "storage"}/{file.storagePath}</div>
+                      )}
+                      {(file.storagePath || file.url) && (
+                        <button
+                          type="button"
+                          className="memory-inline-action"
+                          onClick={() => openStoredProjectFile(file)}
+                        >
+                          Open stored file
+                        </button>
+                      )}
                       {file.summary && (
                         <p className="document-summary">{file.summary}</p>
                       )}

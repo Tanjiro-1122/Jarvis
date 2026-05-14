@@ -729,3 +729,61 @@ JARVIS_VERCEL_TOKEN=...
 JARVIS_VERCEL_PROJECT_ID=...
 JARVIS_VERCEL_TEAM_ID=... # only if needed
 ```
+
+
+## Persistent Workspace Files and Image Uploads
+
+Patch 15 replaces the old `/api/upload` stub with real Supabase Storage upload support and extends the workspace project file map.
+
+What it enables:
+
+- pasted screenshots upload through `/api/upload`
+- uploads are stored in Supabase Storage
+- signed URLs are returned to chat
+- uploaded images are mapped into `workspace_project_files`
+- the Files drawer can show storage path and an “Open stored file” link
+- upload events are logged as `workspace_file.uploaded`
+
+Required Vercel env:
+
+```txt
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Optional env:
+
+```txt
+JARVIS_UPLOAD_BUCKET=jarvis-uploads
+JARVIS_MAX_UPLOAD_BYTES=8388608
+JARVIS_UPLOAD_SIGNED_URL_SECONDS=604800
+```
+
+Supabase schema update required:
+
+Run the latest `supabase/schema.sql` so `workspace_project_files` has:
+
+```txt
+storage_bucket
+storage_path
+public_url
+metadata
+```
+
+The upload route will try to create the private `jarvis-uploads` bucket automatically when using the service-role key. If your Supabase project blocks automatic bucket creation, create a private bucket named `jarvis-uploads` manually in Supabase Storage.
+
+
+## File Viewer and Fresh Signed URLs
+
+Patch 16 adds a safe file-opening layer on top of persistent workspace files.
+
+What it enables:
+
+- workspace uploads use collision-safe project file paths
+- stored files keep permanent `storage_bucket` and `storage_path` metadata
+- `/api/files/signed-url` creates a fresh Supabase signed URL on demand
+- the Files drawer opens stored files through the fresh signed-url endpoint
+- file opens are logged as `workspace_file.signed_url_created`
+- the app no longer depends on old signed URLs staying valid forever
+
+The endpoint is protected by Jarvis session middleware and uses the server-side Supabase service role key. It does not expose the storage service key to the browser.

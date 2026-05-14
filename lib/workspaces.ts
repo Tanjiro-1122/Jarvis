@@ -88,6 +88,10 @@ interface WorkspaceProjectFileRow {
   mime_type: string;
   bytes: number;
   summary: string | null;
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+  public_url?: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -787,7 +791,7 @@ export async function getWorkspaceBootstrap(
       supabase
         .from("workspace_project_files")
         .select(
-          "id, workspace_id, conversation_id, document_id, artifact_id, path, display_name, source_kind, mime_type, bytes, summary, created_at, updated_at"
+          "id, workspace_id, conversation_id, document_id, artifact_id, path, display_name, source_kind, mime_type, bytes, summary, storage_bucket, storage_path, public_url, metadata, created_at, updated_at"
         )
         .in("workspace_id", workspaceIds)
         .order("updated_at", { ascending: false }),
@@ -921,6 +925,10 @@ export async function getWorkspaceBootstrap(
       mimeType: file.mime_type,
       bytes: file.bytes,
       summary: file.summary,
+      url: file.public_url,
+      storageBucket: file.storage_bucket ?? null,
+      storagePath: file.storage_path ?? null,
+      metadata: file.metadata ?? null,
       createdAt: file.created_at,
       updatedAt: file.updated_at,
     }));
