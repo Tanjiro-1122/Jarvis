@@ -1201,6 +1201,32 @@ export function Chat() {
   }
 
 
+  async function generateRepoProposalDiff(proposal: RepoActionProposalSummary) {
+    if (repoProposalBusy) return;
+    const confirmed = window.confirm(`Generate a real proposed diff for review?\n\n${proposal.title}\n\nThis will use OpenAI and GitHub read access, but will not change files or push commits.`);
+    if (!confirmed) return;
+
+    setRepoProposalBusy(true);
+    setRepoProposalStatus("");
+    try {
+      const response = await fetch("/api/repo-actions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, action: "generate_diff" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Failed to generate proposed diff.");
+      setRepoProposalStatus("Proposed diff generated. Review carefully before any execution step.");
+      await refreshRepoProposals(selectedProjectKey);
+      await refreshActionEvents(memoryProjectKey);
+    } catch (error) {
+      setRepoProposalStatus(error instanceof Error ? error.message : "Failed to generate proposed diff.");
+    } finally {
+      setRepoProposalBusy(false);
+    }
+  }
+
+
   async function refreshDeployHealth() {
     setDeployHealthBusy(true);
     setDeployHealthStatus("");
@@ -2552,6 +2578,14 @@ export function Chat() {
                             disabled={repoProposalBusy}
                           >
                             Inspect files
+                          </button>
+                          <button
+                            type="button"
+                            className="memory-inline-action"
+                            onClick={() => generateRepoProposalDiff(proposal)}
+                            disabled={repoProposalBusy}
+                          >
+                            Generate diff
                           </button>
                           {(proposal.status === "proposed" || proposal.status === "draft") && (
                           <button

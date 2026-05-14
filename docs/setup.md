@@ -573,3 +573,32 @@ Inspection is intentionally safe:
 - does not deploy
 
 This uses `GITHUB_TOKEN` or `JARVIS_GITHUB_TOKEN` server-side. No additional Supabase schema is required beyond Patch 8's `draft_metadata` column.
+
+
+## Real Proposed Diff Generator
+
+Patch 10 adds a review-only diff generator to Repo Control.
+
+Use the right-side filing cabinet:
+
+```txt
+Memory button → Repo drawer → Create/select proposal → Generate diff
+```
+
+The generator:
+
+- reads current file contents from GitHub
+- uses `OPENAI_API_KEY` with `JARVIS_PATCH_MODEL` or `JARVIS_CHAT_MODEL`
+- stores a unified proposed diff in `diff_preview`
+- logs `repo_action.diff_generated` in Activity Log
+- does not edit files
+- does not commit
+- does not push
+- does not deploy
+
+Recommended env:
+
+```txt
+OPENAI_API_KEY=...
+JARVIS_PATCH_MODEL=gpt-4o-mini
+```

@@ -1,3 +1,5 @@
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { Octokit } from "@octokit/rest";
 import { getSupabaseClient } from "@/lib/supabase";
 import { logError } from "@/lib/errors";
@@ -78,6 +80,31 @@ function snippetContent(value: string, maxChars = 1800) {
   const cleaned = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]+/g, "").trim();
   if (cleaned.length <= maxChars) return cleaned;
   return `${cleaned.slice(0, maxChars)}\n…`;
+}
+
+interface RepoFileSnapshot {
+  path: string;
+  operation: string;
+  status: "found" | "missing" | "error" | "skipped";
+  sha?: string;
+  size?: number;
+  content?: string;
+  message?: string;
+}
+
+function limitFileForDiff(value: string, maxChars = 9000) {
+  const cleaned = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]+/g, "");
+  if (cleaned.length <= maxChars) return cleaned;
+  return `${cleaned.slice(0, maxChars)}\n/* …truncated for proposal generation… */`;
+}
+
+function sanitizeUnifiedDiff(value: string) {
+  let text = cleanMultiline(value, 24000);
+  text = text.replace(/^```(?:diff|patch)?\s*/i, "").replace(/```$/i, "").trim();
+  if (!text.includes("diff --git") && !text.includes("--- ") && !text.includes("+++ ")) {
+    text = `# Proposed change summary\n${text}`;
+  }
+  return text;
 }
 
 function cleanText(value: unknown, maxChars = 4000) {
@@ -238,6 +265,52 @@ ${proposal.plan}`.toLowerCase();
   const deduped = new Map<string, RepoActionFileTarget>();
   for (const file of files) deduped.set(file.path, file);
   return Array.from(deduped.values()).slice(0, 10);
+}
+
+
+async function getRepoFileSnapshots(proposal: RepoActionProposalRow) {
+  const inferred = inferDraftFiles(proposal).filter((file) => !file.path.includes("<"));
+  const targets = (proposal.files?.length ? proposal.files : inferred).filter((file) => !file.path.includes("<")).slice(0, 6);
+  if (!targets.length) {
+    return { ok: false as const, error: "No concrete file targets found yet. Add file targets with Draft diff first or make the proposal more specific." };
+  }
+
+  const { owner, repo, slug } = getRepoParts(proposal.repo);
+  const octokit = getGitHubClient();
+  let defaultBranch = "main";
+
+  try {
+    const repository = await octokit.repos.get({ owner, repo });
+    defaultBranch = repository.data.default_branch || "main";
+  } catch (error) {
+    logError("repoActions.getRepoFileSnapshots.repo", error);
+    return { ok: false as const, error: error instanceof Error ? error.message : "Unable to read GitHub repo." };
+  }
+
+  const snapshots: RepoFileSnapshot[] = [];
+  for (const target of targets) {
+    const operation = target.operation ?? "inspect";
+    if (operation === "create") {
+      snapshots.push({ path: target.path, operation, status: "skipped", message: "Create target — no existing file expected." });
+      continue;
+    }
+
+    try {
+      const response = await octokit.repos.getContent({ owner, repo, path: target.path, ref: defaultBranch });
+      const content = response.data;
+      if (Array.isArray(content) || content.type !== "file" || !("content" in content)) {
+        snapshots.push({ path: target.path, operation, status: "skipped", message: "Target is not a plain file." });
+        continue;
+      }
+      const decoded = decodeBase64Content(content.content || "");
+      snapshots.push({ path: target.path, operation, status: "found", sha: content.sha, size: content.size, content: decoded });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to read file.";
+      snapshots.push({ path: target.path, operation, status: message.includes("Not Found") ? "missing" : "error", message });
+    }
+  }
+
+  return { ok: true as const, slug, branch: defaultBranch, targets, snapshots };
 }
 
 function buildDraftPreview(proposal: RepoActionProposalRow, files: RepoActionFileTarget[]) {
@@ -465,6 +538,156 @@ export async function inspectRepoActionFiles(options: { id: string }) {
     workspaceId: updated.workspace_id,
     conversationId: updated.conversation_id,
     metadata: { proposalId: updated.id, repo: slug, branch: defaultBranch, files: inspections },
+  });
+
+  return { ok: true, proposal: updated };
+}
+
+
+export async function generateRepoActionProposedDiff(options: { id: string }) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured." };
+  if (!process.env.OPENAI_API_KEY) return { ok: false, error: "OPENAI_API_KEY is not configured." };
+
+  const id = cleanText(options.id, 120);
+  if (!id) return { ok: false, error: "Proposal id is required." };
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !existing) {
+    logError("repoActions.generateRepoActionProposedDiff.fetch", fetchError);
+    return { ok: false, error: fetchError?.message ?? "Proposal not found." };
+  }
+
+  const proposal = existing as RepoActionProposalRow;
+  if (["rejected", "blocked", "cancelled", "executed"].includes(proposal.status)) {
+    return { ok: false, error: `Cannot generate a proposed diff for a ${proposal.status} proposal.` };
+  }
+
+  const snapshotResult = await getRepoFileSnapshots(proposal);
+  if (!snapshotResult.ok) return { ok: false, error: snapshotResult.error };
+
+  const fileContext = snapshotResult.snapshots.map((file) => {
+    if (file.status !== "found") {
+      return `FILE: ${file.path}\nSTATUS: ${file.status}\nMESSAGE: ${file.message ?? "No content available."}`;
+    }
+    return [
+      `FILE: ${file.path}`,
+      `OPERATION: ${file.operation}`,
+      `SHA: ${file.sha}`,
+      `SIZE: ${file.size} bytes`,
+      "CONTENT:",
+      "```",
+      limitFileForDiff(file.content ?? ""),
+      "```",
+    ].join("\n");
+  }).join("\n\n---\n\n");
+
+  const model = process.env.JARVIS_PATCH_MODEL || process.env.JARVIS_CHAT_MODEL || "gpt-4o-mini";
+  const prompt = [
+    "You are Jarvis, Javier's cautious private developer agent.",
+    "Create a focused review-only unified diff proposal from the repo files below.",
+    "Rules:",
+    "- Output ONLY the proposed diff and short inline comments inside the diff when needed.",
+    "- Use unified diff format with diff --git headers when changing existing files.",
+    "- Do not include secrets or credentials.",
+    "- Do not invent unrelated files.",
+    "- Keep the change minimal and directly tied to the proposal.",
+    "- If the file context is insufficient, output a clear blocked note starting with '# BLOCKED'.",
+    "- This is review-only; do not claim anything was committed or deployed.",
+    "",
+    `Repo: ${snapshotResult.slug}`,
+    `Branch: ${snapshotResult.branch}`,
+    `Project: ${proposal.project_key}`,
+    `Risk: ${proposal.risk_level}`,
+    "",
+    "Proposal title:",
+    proposal.title,
+    "",
+    "Summary:",
+    proposal.summary,
+    "",
+    "Findings:",
+    proposal.findings || "None recorded.",
+    "",
+    "Plan:",
+    proposal.plan || "None recorded.",
+    "",
+    "File context:",
+    fileContext,
+  ].join("\n");
+
+  let proposedDiff = "";
+  try {
+    const result = await generateText({
+      model: openai(model),
+      temperature: 0.1,
+      maxTokens: 3500,
+      prompt,
+    });
+    proposedDiff = sanitizeUnifiedDiff(result.text);
+  } catch (error) {
+    logError("repoActions.generateRepoActionProposedDiff.openai", error);
+    return { ok: false, error: error instanceof Error ? error.message : "Unable to generate proposed diff." };
+  }
+
+  const now = new Date().toISOString();
+  const preview = [
+    `# Proposed real diff — ${proposal.title}`,
+    `Repo: ${snapshotResult.slug}`,
+    `Branch: ${snapshotResult.branch}`,
+    `Generated: ${now}`,
+    "",
+    "This is a review-only proposed diff. No files were changed, no commit was created, and nothing was deployed.",
+    "",
+    "```diff",
+    proposedDiff,
+    "```",
+    "",
+    "Approval checkpoint: Javier must approve before any actual file change, commit, push, or deployment.",
+  ].join("\n");
+
+  const { data, error } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .update({
+      files: snapshotResult.targets,
+      diff_preview: preview,
+      draft_metadata: {
+        generated_at: now,
+        draft_type: "ai_unified_diff_proposal",
+        model,
+        repo: snapshotResult.slug,
+        branch: snapshotResult.branch,
+        source_files: snapshotResult.snapshots.map((item) => ({ path: item.path, status: item.status, sha: item.sha, size: item.size, message: item.message })),
+        safety: "review_only_no_files_changed_no_commit_pushed",
+      },
+      updated_at: now,
+    })
+    .eq("id", id)
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .single();
+
+  if (error) {
+    logError("repoActions.generateRepoActionProposedDiff.update", error);
+    return { ok: false, error: error.message };
+  }
+
+  const updated = data as RepoActionProposalRow;
+  await logActionEvent({
+    eventType: "repo_action.diff_generated",
+    summary: `Proposed diff generated: ${updated.title}`,
+    status: "proposed",
+    approvalStage: "plan",
+    riskLevel: updated.risk_level,
+    projectKey: updated.project_key,
+    sessionId: updated.session_id,
+    workspaceId: updated.workspace_id,
+    conversationId: updated.conversation_id,
+    metadata: { proposalId: updated.id, repo: snapshotResult.slug, branch: snapshotResult.branch, model, files: snapshotResult.targets },
   });
 
   return { ok: true, proposal: updated };
