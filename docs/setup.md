@@ -438,3 +438,25 @@ https://your-jarvis-domain.vercel.app/api/memory?query=unfiltr
 Every Jarvis chat request now loads relevant active memories from Supabase and injects them server-side into the system prompt.
 
 This is the first step toward moving long-term assistant memory from Base44 into your own Supabase database.
+
+## Build intelligence panel
+
+Patch 4 adds a lightweight Build Intelligence panel inside Jarvis. It can inspect the Jarvis GitHub repo, latest commit, latest GitHub Actions workflow run, and optionally the latest Vercel deployment.
+
+Add these optional Vercel environment variables if you want the panel to have full signal:
+
+```txt
+JARVIS_GITHUB_REPO=Tanjiro-1122/Jarvis
+GITHUB_TOKEN=your_github_token_or_use_JARVIS_GITHUB_TOKEN
+JARVIS_GITHUB_TOKEN=optional_alternative_github_token
+JARVIS_VERCEL_TOKEN=your_vercel_token
+JARVIS_VERCEL_PROJECT_ID=your_vercel_project_id
+JARVIS_VERCEL_PROJECT_NAME=Jarvis
+JARVIS_VERCEL_TEAM_ID=your_team_id_if_needed
+```
+
+GitHub inspection can work without a token for public repositories, but a token is recommended for private repos and higher rate limits.
+
+Vercel deployment inspection requires `JARVIS_VERCEL_TOKEN` or `VERCEL_TOKEN`. If it is missing, Jarvis will simply show Vercel as optional instead of failing the app.
+
+Every build-intelligence refresh records a low-risk `intelligence.snapshot` event in the Activity Log.

@@ -348,6 +348,49 @@ interface ActionEventSummary {
   created_at: string;
 }
 
+interface BuildIntelligenceSnapshot {
+  generatedAt: string;
+  github: {
+    configured: boolean;
+    repo: string;
+    htmlUrl?: string;
+    defaultBranch?: string;
+    private?: boolean;
+    pushedAt?: string | null;
+    latestCommit?: {
+      sha: string;
+      message: string;
+      author?: string | null;
+      date?: string | null;
+      url?: string;
+    } | null;
+    latestWorkflowRun?: {
+      id: number;
+      name?: string | null;
+      status?: string | null;
+      conclusion?: string | null;
+      branch?: string | null;
+      updatedAt?: string | null;
+      url?: string | null;
+    } | null;
+    error?: string;
+  };
+  vercel: {
+    configured: boolean;
+    project?: string | null;
+    latestDeployment?: {
+      uid?: string;
+      name?: string | null;
+      state?: string | null;
+      url?: string | null;
+      readyAt?: string | null;
+      createdAt?: string | null;
+      target?: string | null;
+    } | null;
+    error?: string;
+  };
+}
+
 const PROJECT_MEMORY_OPTIONS = [
   { key: "global", label: "General" },
   { key: "unfiltr", label: "Unfiltr" },
@@ -795,6 +838,9 @@ export function Chat() {
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [actionEvents, setActionEvents] = useState<ActionEventSummary[]>([]);
   const [actionLogStatus, setActionLogStatus] = useState("");
+  const [buildIntel, setBuildIntel] = useState<BuildIntelligenceSnapshot | null>(null);
+  const [buildIntelStatus, setBuildIntelStatus] = useState("");
+  const [buildIntelBusy, setBuildIntelBusy] = useState(false);
 
   const {
     messages,
@@ -908,6 +954,27 @@ export function Chat() {
     const payload = (await response.json()) as { events?: ActionEventSummary[] };
     setActionEvents(payload.events ?? []);
     setActionLogStatus("");
+  }
+
+
+  async function refreshBuildIntelligence(nextProjectKey = "jarvis") {
+    setBuildIntelBusy(true);
+    setBuildIntelStatus("");
+    try {
+      const search = new URLSearchParams({ projectKey: nextProjectKey });
+      const response = await fetch(`/api/intelligence?${search.toString()}`);
+      const payload = (await response.json().catch(() => ({}))) as BuildIntelligenceSnapshot & { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Build intelligence unavailable.");
+      setBuildIntel(payload);
+      if (payload.github?.error || payload.vercel?.error) {
+        setBuildIntelStatus("Some signals need env setup. GitHub works best with GITHUB_TOKEN; Vercel needs VERCEL_TOKEN/project env vars.");
+      }
+      await refreshActionEvents(memoryProjectKey);
+    } catch (error) {
+      setBuildIntelStatus(error instanceof Error ? error.message : "Build intelligence unavailable.");
+    } finally {
+      setBuildIntelBusy(false);
+    }
   }
 
   async function handleSaveMemory(e: React.FormEvent<HTMLFormElement>) {
@@ -1229,6 +1296,12 @@ export function Chat() {
     void refreshActionEvents(memoryProjectKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memoryProjectKey]);
+
+
+  useEffect(() => {
+    void refreshBuildIntelligence("jarvis");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -2030,6 +2103,90 @@ export function Chat() {
                   No matching memories yet. Save one here, or ask Jarvis to remember an important decision.
                 </div>
               )}
+            </div>
+
+            <div className="context-panel-section build-intel-section">
+              <div className="context-panel-header">
+                <div>
+                  <div className="side-section-label">Build intelligence</div>
+                  <p className="side-section-copy">
+                    Repo, workflow, and deployment signals for Jarvis.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="memory-inline-action"
+                  onClick={() => refreshBuildIntelligence("jarvis")}
+                  disabled={buildIntelBusy}
+                >
+                  {buildIntelBusy ? "Checking…" : "Refresh"}
+                </button>
+              </div>
+
+              {buildIntel ? (
+                <div className="build-intel-grid">
+                  <article className="build-intel-card">
+                    <div className="build-intel-title-row">
+                      <span>GitHub</span>
+                      <span className={`action-status-pill ${buildIntel.github.error ? "action-status-pill--failed" : "action-status-pill--executed"}`}>
+                        {buildIntel.github.error ? "Needs check" : "Connected"}
+                      </span>
+                    </div>
+                    <p className="build-intel-main">{buildIntel.github.repo}</p>
+                    {buildIntel.github.latestCommit && (
+                      <p className="build-intel-copy">
+                        Latest commit {buildIntel.github.latestCommit.sha.slice(0, 7)} · {buildIntel.github.latestCommit.message.split("\n")[0]}
+                      </p>
+                    )}
+                    {buildIntel.github.latestWorkflowRun && (
+                      <div className="memory-meta-row">
+                        <span>{buildIntel.github.latestWorkflowRun.name ?? "workflow"}</span>
+                        <span>{buildIntel.github.latestWorkflowRun.status ?? "unknown"}</span>
+                        <span>{buildIntel.github.latestWorkflowRun.conclusion ?? "pending"}</span>
+                      </div>
+                    )}
+                    {buildIntel.github.error && <p className="memory-status">{buildIntel.github.error}</p>}
+                    {buildIntel.github.htmlUrl && (
+                      <a className="github-link" href={buildIntel.github.htmlUrl} target="_blank" rel="noreferrer">
+                        Open repo
+                      </a>
+                    )}
+                  </article>
+
+                  <article className="build-intel-card">
+                    <div className="build-intel-title-row">
+                      <span>Vercel</span>
+                      <span className={`action-status-pill ${buildIntel.vercel.error ? "action-status-pill--proposed" : "action-status-pill--executed"}`}>
+                        {buildIntel.vercel.configured ? "Configured" : "Optional"}
+                      </span>
+                    </div>
+                    <p className="build-intel-main">{buildIntel.vercel.project ?? "Jarvis"}</p>
+                    {buildIntel.vercel.latestDeployment ? (
+                      <>
+                        <p className="build-intel-copy">
+                          Latest deployment: {buildIntel.vercel.latestDeployment.state ?? "unknown"}
+                        </p>
+                        <div className="memory-meta-row">
+                          <span>{buildIntel.vercel.latestDeployment.target ?? "target unknown"}</span>
+                          <span>{formatTimestamp(buildIntel.vercel.latestDeployment.readyAt ?? buildIntel.vercel.latestDeployment.createdAt ?? buildIntel.generatedAt)}</span>
+                        </div>
+                        {buildIntel.vercel.latestDeployment.url && (
+                          <a className="github-link" href={buildIntel.vercel.latestDeployment.url} target="_blank" rel="noreferrer">
+                            Open deployment
+                          </a>
+                        )}
+                      </>
+                    ) : (
+                      <p className="build-intel-copy">{buildIntel.vercel.error ?? "No deployment signal yet."}</p>
+                    )}
+                  </article>
+                </div>
+              ) : (
+                <div className="context-empty">
+                  Refresh to inspect the Jarvis repo and deployment signals.
+                </div>
+              )}
+              {buildIntelStatus && <p className="memory-status">{buildIntelStatus}</p>}
             </div>
 
             <div className="context-panel-section action-log-section">
