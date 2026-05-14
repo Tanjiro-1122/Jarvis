@@ -360,3 +360,6 @@ There is no separate test suite in the repository today.
 - Workspace retrieval now includes embedding-assisted ranking, but remains Postgres-backed (no dedicated vector DB yet)
 - Images are not indexed into retrieval in this stage
 - Supabase remains optional, but persistent workspace features require the schema in `supabase/schema.sql`
+
+
+Security foundation notes live in [`docs/security.md`](./docs/security.md).

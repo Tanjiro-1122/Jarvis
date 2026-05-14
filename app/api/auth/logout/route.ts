@@ -1,12 +1,27 @@
-import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE, verifySessionCookie, getSessionSecret } from "@/lib/auth";
+import { getClientIp, logSecurityEvent } from "@/lib/security";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const secret = getSessionSecret();
+  const cookieValue = req.cookies.get(SESSION_COOKIE)?.value;
+  const verification = secret
+    ? await verifySessionCookie(cookieValue, secret)
+    : { ok: false as const, reason: "missing" as const };
+
+  await logSecurityEvent({
+    eventType: "logout",
+    outcome: "success",
+    ipAddress: getClientIp(req.headers),
+    userAgent: req.headers.get("user-agent"),
+    sessionNonce: verification.ok ? verification.nonce : null,
+  });
+
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "strict",
     maxAge: 0,
     path: "/",
   });

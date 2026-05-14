@@ -1,22 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { computeToken, getSessionSecret, safeEqual, SESSION_COOKIE } from "@/lib/auth";
+import { getSessionSecret, SESSION_COOKIE, verifySessionCookie } from "@/lib/auth";
 
-async function verifyToken(cookieValue: string, secret: string): Promise<boolean> {
-  const dotIndex = cookieValue.indexOf(".");
-  if (dotIndex === -1) return false; // legacy fixed-token format — reject
-  const nonce = cookieValue.slice(0, dotIndex);
-  const provided = cookieValue.slice(dotIndex + 1);
-  if (!nonce || !provided) return false;
-  const expected = await computeToken(secret, nonce);
-  return safeEqual(provided, expected);
+function withSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "same-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return response;
+}
+
+function redirectToLogin(request: NextRequest, reason?: string): NextResponse {
+  const loginUrl = new URL("/login", request.url);
+  if (reason) loginUrl.searchParams.set("reason", reason);
+  return withSecurityHeaders(NextResponse.redirect(loginUrl));
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page and auth API routes through
+  // Allow login page and auth API routes through.
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
-    return NextResponse.next();
+    return withSecurityHeaders(NextResponse.next());
   }
 
   // Allow the private memory seed endpoint when a seed token is configured and
@@ -27,7 +32,7 @@ export async function middleware(request: NextRequest) {
       request.headers.get("x-jarvis-seed-token") ??
       request.nextUrl.searchParams.get("token");
     if (seedToken && provided === seedToken) {
-      return NextResponse.next();
+      return withSecurityHeaders(NextResponse.next());
     }
   }
 
@@ -36,29 +41,39 @@ export async function middleware(request: NextRequest) {
   const secret = getSessionSecret();
   if (!secret) {
     if (process.env.NODE_ENV !== "production") {
-      return NextResponse.next();
+      return withSecurityHeaders(NextResponse.next());
     }
 
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { error: "Jarvis authentication is not configured. Set SESSION_SECRET." },
-        { status: 503 }
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Jarvis authentication is not configured. Set SESSION_SECRET." },
+          { status: 503 }
+        )
       );
     }
 
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("setup", "missing-session-secret");
-    return NextResponse.redirect(loginUrl);
+    return redirectToLogin(request, "missing-session-secret");
   }
 
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const verification = await verifySessionCookie(
+    request.cookies.get(SESSION_COOKIE)?.value,
+    secret
+  );
 
-  if (!token || !(await verifyToken(token, secret))) {
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+  if (!verification.ok) {
+    if (pathname.startsWith("/api/")) {
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: verification.reason === "expired" ? "Session expired." : "Authentication required." },
+          { status: 401 }
+        )
+      );
+    }
+    return redirectToLogin(request, verification.reason);
   }
 
-  return NextResponse.next();
+  return withSecurityHeaders(NextResponse.next());
 }
 
 export const config = {

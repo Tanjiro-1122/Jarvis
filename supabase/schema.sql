@@ -197,3 +197,21 @@ insert into workspace_memberships (workspace_id, session_id, role)
 select id, session_id, 'owner'
 from workspaces
 on conflict (workspace_id, session_id) do nothing;
+
+create table if not exists jarvis_security_events (
+  id            uuid primary key default gen_random_uuid(),
+  event_type    text not null,
+  outcome       text not null check (outcome in ('success', 'failure', 'blocked', 'info')),
+  ip_address    text,
+  user_agent    text,
+  session_nonce text,
+  metadata      jsonb not null default '{}'::jsonb,
+  created_at    timestamptz default now()
+);
+
+create index if not exists jarvis_security_events_created_at_idx
+  on jarvis_security_events(created_at desc);
+create index if not exists jarvis_security_events_event_type_created_at_idx
+  on jarvis_security_events(event_type, created_at desc);
+create index if not exists jarvis_security_events_outcome_created_at_idx
+  on jarvis_security_events(outcome, created_at desc);
