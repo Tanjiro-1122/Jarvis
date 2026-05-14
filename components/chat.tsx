@@ -391,6 +391,25 @@ interface BuildIntelligenceSnapshot {
   };
 }
 
+interface RepoActionProposalSummary {
+  id: string;
+  title: string;
+  summary: string;
+  findings: string;
+  plan: string;
+  repo: string;
+  project_key: string;
+  risk_level: "low" | "medium" | "high";
+  status: "draft" | "proposed" | "approved" | "rejected" | "blocked" | "executed" | "cancelled";
+  files: Array<{ path: string; operation?: "create" | "update" | "delete" | "inspect"; note?: string }>;
+  diff_preview: string;
+  approval_note: string | null;
+  created_at: string;
+  updated_at: string;
+  approved_at: string | null;
+  executed_at: string | null;
+}
+
 const PROJECT_MEMORY_OPTIONS = [
   { key: "global", label: "General" },
   { key: "unfiltr", label: "Unfiltr" },
@@ -841,6 +860,11 @@ export function Chat() {
   const [buildIntel, setBuildIntel] = useState<BuildIntelligenceSnapshot | null>(null);
   const [buildIntelStatus, setBuildIntelStatus] = useState("");
   const [buildIntelBusy, setBuildIntelBusy] = useState(false);
+  const [repoProposals, setRepoProposals] = useState<RepoActionProposalSummary[]>([]);
+  const [repoProposalStatus, setRepoProposalStatus] = useState("");
+  const [repoProposalBusy, setRepoProposalBusy] = useState(false);
+  const [repoProposalTitle, setRepoProposalTitle] = useState("");
+  const [repoProposalSummary, setRepoProposalSummary] = useState("");
 
   const {
     messages,
@@ -974,6 +998,85 @@ export function Chat() {
       setBuildIntelStatus(error instanceof Error ? error.message : "Build intelligence unavailable.");
     } finally {
       setBuildIntelBusy(false);
+    }
+  }
+
+
+  async function refreshRepoProposals(nextProjectKey = "jarvis") {
+    const search = new URLSearchParams({ projectKey: nextProjectKey });
+    const response = await fetch(`/api/repo-actions?${search.toString()}`);
+    if (!response.ok) {
+      setRepoProposalStatus("Repo control unavailable. Run the latest Supabase schema if this persists.");
+      return;
+    }
+    const payload = (await response.json()) as { proposals?: RepoActionProposalSummary[] };
+    setRepoProposals(payload.proposals ?? []);
+    setRepoProposalStatus("");
+  }
+
+  async function createRepoProposal(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!repoProposalTitle.trim() || !repoProposalSummary.trim() || repoProposalBusy) return;
+
+    setRepoProposalBusy(true);
+    setRepoProposalStatus("");
+    try {
+      const response = await fetch("/api/repo-actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: repoProposalTitle.trim(),
+          summary: repoProposalSummary.trim(),
+          findings: "Proposal created from Jarvis Repo Control. Full findings should be added by Jarvis before execution.",
+          plan: "Review the proposal, confirm scope and risk, then approve only if Javier explicitly agrees.",
+          projectKey: "jarvis",
+          repo: buildIntel?.github?.repo ?? "Tanjiro-1122/Jarvis",
+          riskLevel: "medium",
+          files: [],
+          diffPreview: "No diff generated yet. This proposal is an approval checkpoint, not an executed change.",
+          sessionId: sessionId ?? undefined,
+          workspaceId: workspaceId ?? undefined,
+          conversationId: conversationId ?? undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Failed to create repo proposal.");
+      setRepoProposalTitle("");
+      setRepoProposalSummary("");
+      setRepoProposalStatus("Proposal created. It still requires explicit approval before any future repo execution.");
+      await refreshRepoProposals("jarvis");
+      await refreshActionEvents(memoryProjectKey);
+    } catch (error) {
+      setRepoProposalStatus(error instanceof Error ? error.message : "Failed to create repo proposal.");
+    } finally {
+      setRepoProposalBusy(false);
+    }
+  }
+
+  async function updateRepoProposalStatus(proposal: RepoActionProposalSummary, status: "approved" | "rejected" | "blocked" | "cancelled") {
+    const note = status === "approved"
+      ? "Approved from Jarvis Repo Control. Execution still requires a separate controlled action path."
+      : `${status} from Jarvis Repo Control.`;
+    const confirmed = window.confirm(`${status === "approved" ? "Approve" : "Update"} proposal?\n\n${proposal.title}`);
+    if (!confirmed || repoProposalBusy) return;
+
+    setRepoProposalBusy(true);
+    setRepoProposalStatus("");
+    try {
+      const response = await fetch("/api/repo-actions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, status, approvalNote: note }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Failed to update proposal.");
+      setRepoProposalStatus(`Proposal ${status}.`);
+      await refreshRepoProposals("jarvis");
+      await refreshActionEvents(memoryProjectKey);
+    } catch (error) {
+      setRepoProposalStatus(error instanceof Error ? error.message : "Failed to update proposal.");
+    } finally {
+      setRepoProposalBusy(false);
     }
   }
 
@@ -1300,6 +1403,12 @@ export function Chat() {
 
   useEffect(() => {
     void refreshBuildIntelligence("jarvis");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
+  useEffect(() => {
+    void refreshRepoProposals("jarvis");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2101,6 +2210,107 @@ export function Chat() {
               ) : (
                 <div className="context-empty">
                   No matching memories yet. Save one here, or ask Jarvis to remember an important decision.
+                </div>
+              )}
+            </div>
+
+            <div className="context-panel-section repo-control-section">
+              <div className="context-panel-header">
+                <div>
+                  <div className="side-section-label">Repo control</div>
+                  <p className="side-section-copy">
+                    Proposed repo actions must be reviewed and approved before execution.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="memory-inline-action"
+                  onClick={() => refreshRepoProposals("jarvis")}
+                  disabled={repoProposalBusy}
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <div className="approval-flow-card">
+                <span>Findings</span>
+                <span>Plan</span>
+                <span>Approval</span>
+                <span>Execution</span>
+              </div>
+
+              <form className="repo-proposal-form" onSubmit={createRepoProposal}>
+                <input
+                  className="workspace-field"
+                  value={repoProposalTitle}
+                  onChange={(e) => setRepoProposalTitle(e.target.value)}
+                  placeholder="Proposal title"
+                />
+                <textarea
+                  className="workspace-field workspace-field--multiline"
+                  value={repoProposalSummary}
+                  onChange={(e) => setRepoProposalSummary(e.target.value)}
+                  placeholder="What should Jarvis prepare, inspect, or change?"
+                  rows={3}
+                />
+                <button
+                  type="submit"
+                  className="workspace-create-button"
+                  disabled={repoProposalBusy || !repoProposalTitle.trim() || !repoProposalSummary.trim()}
+                >
+                  {repoProposalBusy ? "Saving…" : "Create proposal"}
+                </button>
+              </form>
+
+              {repoProposalStatus && <p className="memory-status">{repoProposalStatus}</p>}
+              {repoProposals.length ? (
+                <div className="repo-proposal-list">
+                  {repoProposals.slice(0, 8).map((proposal) => (
+                    <article key={proposal.id} className="repo-proposal-card">
+                      <div className="repo-proposal-header">
+                        <span>{proposal.title}</span>
+                        <span className={`action-status-pill action-status-pill--${proposal.status === "approved" ? "approved" : proposal.status === "rejected" || proposal.status === "blocked" ? "blocked" : proposal.status === "proposed" ? "proposed" : "info"}`}>
+                          {proposal.status}
+                        </span>
+                      </div>
+                      <p className="build-intel-copy">{proposal.summary}</p>
+                      <div className="memory-meta-row">
+                        <span>{proposal.repo}</span>
+                        <span>{proposal.risk_level} risk</span>
+                        <span>{formatTimestamp(proposal.updated_at)}</span>
+                      </div>
+                      {proposal.diff_preview && (
+                        <details className="repo-diff-preview">
+                          <summary>Preview</summary>
+                          <pre>{proposal.diff_preview}</pre>
+                        </details>
+                      )}
+                      {(proposal.status === "proposed" || proposal.status === "draft") && (
+                        <div className="memory-card-actions">
+                          <button
+                            type="button"
+                            className="memory-inline-action"
+                            onClick={() => updateRepoProposalStatus(proposal, "approved")}
+                            disabled={repoProposalBusy}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="memory-inline-action memory-inline-action--danger"
+                            onClick={() => updateRepoProposalStatus(proposal, "rejected")}
+                            disabled={repoProposalBusy}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="context-empty">
+                  No repo proposals yet. Create one here, or let Jarvis propose one after an audit.
                 </div>
               )}
             </div>

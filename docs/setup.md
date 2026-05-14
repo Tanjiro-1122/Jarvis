@@ -460,3 +460,24 @@ GitHub inspection can work without a token for public repositories, but a token 
 Vercel deployment inspection requires `JARVIS_VERCEL_TOKEN` or `VERCEL_TOKEN`. If it is missing, Jarvis will simply show Vercel as optional instead of failing the app.
 
 Every build-intelligence refresh records a low-risk `intelligence.snapshot` event in the Activity Log.
+
+## Controlled repo actions
+
+Patch 5 adds a Repo Control foundation for safe code-change workflows. It stores proposed repo actions in Supabase and requires explicit approval before any future execution path.
+
+Run the latest `supabase/schema.sql` after this patch. The new table starts with:
+
+```sql
+create table if not exists jarvis_repo_action_proposals
+```
+
+This table stores:
+
+- findings and plan
+- target repo/project
+- risk level
+- status such as `proposed`, `approved`, `rejected`, or `executed`
+- file targets and diff preview
+- approval notes and timestamps
+
+Patch 5 does **not** silently modify repositories. It creates the control and audit layer first. Future repo execution should only operate against an approved proposal and should still show Javier the exact files/diff before pushing.

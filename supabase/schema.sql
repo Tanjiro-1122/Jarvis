@@ -239,3 +239,32 @@ create index if not exists jarvis_action_events_type_created_at_idx
   on jarvis_action_events(event_type, created_at desc);
 create index if not exists jarvis_action_events_status_created_at_idx
   on jarvis_action_events(status, created_at desc);
+
+create table if not exists jarvis_repo_action_proposals (
+  id              uuid primary key default gen_random_uuid(),
+  title           text not null,
+  summary         text not null,
+  findings        text not null default '',
+  plan            text not null default '',
+  repo            text not null default 'Tanjiro-1122/Jarvis',
+  project_key     text not null default 'jarvis',
+  risk_level      text not null default 'medium' check (risk_level in ('low', 'medium', 'high')),
+  status          text not null default 'proposed' check (status in ('draft', 'proposed', 'approved', 'rejected', 'blocked', 'executed', 'cancelled')),
+  files           jsonb not null default '[]'::jsonb,
+  diff_preview    text not null default '',
+  approval_note   text,
+  session_id      text,
+  workspace_id    uuid,
+  conversation_id uuid,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now(),
+  approved_at     timestamptz,
+  executed_at     timestamptz
+);
+
+create index if not exists jarvis_repo_action_proposals_created_at_idx
+  on jarvis_repo_action_proposals(created_at desc);
+create index if not exists jarvis_repo_action_proposals_project_created_at_idx
+  on jarvis_repo_action_proposals(project_key, created_at desc);
+create index if not exists jarvis_repo_action_proposals_status_created_at_idx
+  on jarvis_repo_action_proposals(status, created_at desc);
