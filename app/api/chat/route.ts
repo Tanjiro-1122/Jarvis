@@ -17,6 +17,7 @@ import {
   saveConversationExchange,
 } from "@/lib/workspaces";
 import { logError } from "@/lib/errors";
+import { getOwnerMemorySection } from "@/lib/owner-memory";
 import {
   buildPlannerOutput,
   formatCodeExecutionSummary,
@@ -1110,6 +1111,7 @@ ${retrievalHits
     // Allow the chat model to be overridden via environment variable so the
     // deployment can switch to a newer or cheaper model without a code change.
     const CHAT_MODEL = process.env.JARVIS_CHAT_MODEL ?? "gpt-4o-mini";
+    const ownerMemorySection = getOwnerMemorySection();
 
     const result = streamText({
       model: openai(CHAT_MODEL),
@@ -1153,6 +1155,8 @@ ${routingHint}
 - For large documents the model receives the full text; use it directly without hedging about "not being able to access files"
 - Summarize, critique, explain, refactor, or answer questions about uploaded content with precision
 ${workspaceContextSection}
+${ownerMemorySection ? `
+${ownerMemorySection}` : ""}
 
 ## Planner / Executor
 - Intent: ${plannerOutput.intent}

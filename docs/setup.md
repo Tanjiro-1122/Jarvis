@@ -30,6 +30,7 @@ TAVILY_API_KEY
 GITHUB_TOKEN
 JARVIS_CODE_EXECUTION_ENABLED=true
 JARVIS_CHAT_MODEL=gpt-4o-mini
+JARVIS_OWNER_MEMORY=private_safe_memory_for_javier_and_his_projects
 ```
 
 Important: do **not** use `NEXT_PUBLIC_` for Supabase keys in this app. Jarvis uses Supabase from server routes only.
@@ -171,7 +172,16 @@ GITHUB_TOKEN=your_github_token
 JARVIS_CODE_EXECUTION_ENABLED=true
 JARVIS_CHAT_MAX_REQUESTS_PER_MINUTE=20
 JARVIS_CHAT_MODEL=gpt-4o-mini
+JARVIS_OWNER_MEMORY=paste_safe_owner_memory_here
 ```
+
+Optional private memory:
+
+```txt
+JARVIS_OWNER_MEMORY=paste_safe_owner_memory_here
+```
+
+Use this for curated private context about Javier, Jarvis, and active projects. Keep it in Vercel only. Do not put private memory in GitHub, README files, or client-side variables.
 
 Optional image security setting for production:
 
