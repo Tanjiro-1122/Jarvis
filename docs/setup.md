@@ -523,3 +523,29 @@ The switchboard scopes controls to:
 When you switch projects, Jarvis updates the memory project filter, repo proposals, activity-log project context, and build-intelligence repo target.
 
 This does not add a new Supabase table. It uses existing memory/action/repo proposal tables.
+
+## Proposal-to-diff drafting
+
+Patch 8 adds draft diff previews to Repo Control.
+
+Use the right-side filing cabinet:
+
+```txt
+Memory button → Repo drawer → Create proposal → Draft diff
+```
+
+Drafting is intentionally safe:
+
+- no files are changed
+- no commits are pushed
+- no deployment is triggered
+- the proposal gets a review-only `diff_preview`
+- proposed file targets are stored on the proposal
+- Activity Log records `repo_action.diff_drafted`
+
+Patch 8 adds one optional metadata column. Run latest `supabase/schema.sql`, or run this repair directly:
+
+```sql
+alter table jarvis_repo_action_proposals
+  add column if not exists draft_metadata jsonb not null default '{}'::jsonb;
+```

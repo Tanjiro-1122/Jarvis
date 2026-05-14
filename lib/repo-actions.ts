@@ -39,6 +39,7 @@ export interface RepoActionProposalRow {
   files: RepoActionFileTarget[];
   diff_preview: string;
   approval_note: string | null;
+  draft_metadata: Record<string, unknown>;
   session_id: string | null;
   workspace_id: string | null;
   conversation_id: string | null;
@@ -129,7 +130,7 @@ export async function createRepoActionProposal(input: RepoActionProposalInput) {
   const { data, error } = await supabase
     .from("jarvis_repo_action_proposals")
     .insert(payload)
-    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
     .single();
 
   if (error) {
@@ -160,7 +161,7 @@ export async function listRepoActionProposals(options: { projectKey?: string | n
   const limit = Math.min(Math.max(options.limit ?? 20, 1), 80);
   let request = supabase
     .from("jarvis_repo_action_proposals")
-    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
     .order("updated_at", { ascending: false })
     .limit(limit);
 
@@ -175,6 +176,138 @@ export async function listRepoActionProposals(options: { projectKey?: string | n
   }
 
   return (data ?? []) as RepoActionProposalRow[];
+}
+
+
+function inferDraftFiles(proposal: RepoActionProposalRow): RepoActionFileTarget[] {
+  if (proposal.files?.length) return proposal.files;
+  const text = `${proposal.title}
+${proposal.summary}
+${proposal.findings}
+${proposal.plan}`.toLowerCase();
+  const files: RepoActionFileTarget[] = [];
+
+  if (text.includes("ui") || text.includes("layout") || text.includes("panel") || text.includes("drawer") || text.includes("button")) {
+    files.push({ path: "components/chat.tsx", operation: "update", note: "Likely UI logic/component changes." });
+    files.push({ path: "app/globals.css", operation: "update", note: "Likely styling changes." });
+  }
+  if (text.includes("api") || text.includes("route") || text.includes("backend")) {
+    files.push({ path: "app/api/<route>/route.ts", operation: "update", note: "API route to inspect or update." });
+  }
+  if (text.includes("memory")) {
+    files.push({ path: "app/api/memory/route.ts", operation: "inspect", note: "Memory API may be relevant." });
+  }
+  if (text.includes("repo") || text.includes("proposal") || text.includes("diff")) {
+    files.push({ path: "lib/repo-actions.ts", operation: "update", note: "Repo proposal logic may be relevant." });
+    files.push({ path: "app/api/repo-actions/route.ts", operation: "update", note: "Repo proposal API may be relevant." });
+  }
+  if (text.includes("supabase") || text.includes("schema") || text.includes("table")) {
+    files.push({ path: "supabase/schema.sql", operation: "update", note: "Schema may need an idempotent migration." });
+  }
+  if (text.includes("docs") || text.includes("setup")) {
+    files.push({ path: "docs/setup.md", operation: "update", note: "Setup documentation may need updating." });
+  }
+
+  const deduped = new Map<string, RepoActionFileTarget>();
+  for (const file of files) deduped.set(file.path, file);
+  return Array.from(deduped.values()).slice(0, 10);
+}
+
+function buildDraftPreview(proposal: RepoActionProposalRow, files: RepoActionFileTarget[]) {
+  const lines = [
+    `# Draft diff preview — ${proposal.title}`,
+    `Repo: ${proposal.repo}`,
+    `Project: ${proposal.project_key}`,
+    `Risk: ${proposal.risk_level}`,
+    "",
+    "This is a review draft only. No files have been changed and no commit has been pushed.",
+    "",
+    "## Findings",
+    proposal.findings || proposal.summary || "Findings need to be confirmed before execution.",
+    "",
+    "## Plan",
+    proposal.plan || "1. Inspect the target files.\n2. Make the smallest safe change.\n3. Run build/checks.\n4. Show exact diff before commit.",
+    "",
+    "## Proposed file targets",
+    ...(files.length ? files.map((file) => `- ${file.operation ?? "inspect"}: ${file.path}${file.note ? ` — ${file.note}` : ""}`) : ["- inspect: target files still need to be identified"]),
+    "",
+    "## Draft patch outline",
+    "```diff",
+    "diff --git a/<target-file> b/<target-file>",
+    "--- a/<target-file>",
+    "+++ b/<target-file>",
+    "@@",
+    "+ Proposed changes will appear here after Jarvis inspects the files and Javier approves execution scope.",
+    "```",
+    "",
+    "Approval checkpoint: Javier must approve the real diff before commit/push.",
+  ];
+  return lines.join("\n");
+}
+
+export async function draftRepoActionDiff(options: { id: string }) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured." };
+
+  const id = cleanText(options.id, 120);
+  if (!id) return { ok: false, error: "Proposal id is required." };
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !existing) {
+    logError("repoActions.draftRepoActionDiff.fetch", fetchError);
+    return { ok: false, error: fetchError?.message ?? "Proposal not found." };
+  }
+
+  const proposal = existing as RepoActionProposalRow;
+  if (["rejected", "blocked", "cancelled", "executed"].includes(proposal.status)) {
+    return { ok: false, error: `Cannot draft diff for a ${proposal.status} proposal.` };
+  }
+
+  const files = inferDraftFiles(proposal);
+  const diffPreview = buildDraftPreview(proposal, files);
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .update({
+      files,
+      diff_preview: diffPreview,
+      draft_metadata: {
+        drafted_at: now,
+        draft_type: "review_preview",
+        safety: "no_files_changed_no_commit_pushed",
+      },
+      updated_at: now,
+    })
+    .eq("id", id)
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .single();
+
+  if (error) {
+    logError("repoActions.draftRepoActionDiff.update", error);
+    return { ok: false, error: error.message };
+  }
+
+  const updated = data as RepoActionProposalRow;
+  await logActionEvent({
+    eventType: "repo_action.diff_drafted",
+    summary: `Draft diff prepared: ${updated.title}`,
+    status: "proposed",
+    approvalStage: "plan",
+    riskLevel: updated.risk_level,
+    projectKey: updated.project_key,
+    sessionId: updated.session_id,
+    workspaceId: updated.workspace_id,
+    conversationId: updated.conversation_id,
+    metadata: { proposalId: updated.id, repo: updated.repo, files },
+  });
+
+  return { ok: true, proposal: updated };
 }
 
 export async function updateRepoActionStatus(options: {
@@ -202,7 +335,7 @@ export async function updateRepoActionStatus(options: {
     .from("jarvis_repo_action_proposals")
     .update(payload)
     .eq("id", id)
-    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
     .single();
 
   if (error) {

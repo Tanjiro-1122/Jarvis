@@ -404,6 +404,7 @@ interface RepoActionProposalSummary {
   files: Array<{ path: string; operation?: "create" | "update" | "delete" | "inspect"; note?: string }>;
   diff_preview: string;
   approval_note: string | null;
+  draft_metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   approved_at: string | null;
@@ -1146,6 +1147,30 @@ export function Chat() {
       await refreshActionEvents(memoryProjectKey);
     } catch (error) {
       setRepoProposalStatus(error instanceof Error ? error.message : "Failed to update proposal.");
+    } finally {
+      setRepoProposalBusy(false);
+    }
+  }
+
+
+  async function draftRepoProposalDiff(proposal: RepoActionProposalSummary) {
+    if (repoProposalBusy) return;
+
+    setRepoProposalBusy(true);
+    setRepoProposalStatus("");
+    try {
+      const response = await fetch("/api/repo-actions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, action: "draft_diff" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Failed to draft diff preview.");
+      setRepoProposalStatus("Draft preview prepared. Review it before any real repo execution.");
+      await refreshRepoProposals(selectedProjectKey);
+      await refreshActionEvents(memoryProjectKey);
+    } catch (error) {
+      setRepoProposalStatus(error instanceof Error ? error.message : "Failed to draft diff preview.");
     } finally {
       setRepoProposalBusy(false);
     }
@@ -2473,14 +2498,30 @@ export function Chat() {
                         <span>{proposal.risk_level} risk</span>
                         <span>{formatTimestamp(proposal.updated_at)}</span>
                       </div>
+                      {proposal.files?.length ? (
+                        <div className="repo-file-targets">
+                          {proposal.files.slice(0, 5).map((file) => (
+                            <span key={`${proposal.id}-${file.path}`}>{file.operation ?? "inspect"}: {file.path}</span>
+                          ))}
+                        </div>
+                      ) : null}
                       {proposal.diff_preview && (
                         <details className="repo-diff-preview">
                           <summary>Preview</summary>
                           <pre>{proposal.diff_preview}</pre>
                         </details>
                       )}
-                      {(proposal.status === "proposed" || proposal.status === "draft") && (
+                      {(proposal.status === "proposed" || proposal.status === "draft" || proposal.status === "approved") && (
                         <div className="memory-card-actions">
+                          <button
+                            type="button"
+                            className="memory-inline-action"
+                            onClick={() => draftRepoProposalDiff(proposal)}
+                            disabled={repoProposalBusy}
+                          >
+                            Draft diff
+                          </button>
+                          {(proposal.status === "proposed" || proposal.status === "draft") && (
                           <button
                             type="button"
                             className="memory-inline-action"
@@ -2489,6 +2530,8 @@ export function Chat() {
                           >
                             Approve
                           </button>
+                          )}
+                          {(proposal.status === "proposed" || proposal.status === "draft") && (
                           <button
                             type="button"
                             className="memory-inline-action memory-inline-action--danger"
@@ -2497,6 +2540,7 @@ export function Chat() {
                           >
                             Reject
                           </button>
+                          )}
                         </div>
                       )}
                     </article>

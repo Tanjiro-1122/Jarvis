@@ -253,6 +253,7 @@ create table if not exists jarvis_repo_action_proposals (
   files           jsonb not null default '[]'::jsonb,
   diff_preview    text not null default '',
   approval_note   text,
+  draft_metadata  jsonb not null default '{}'::jsonb,
   session_id      text,
   workspace_id    uuid,
   conversation_id uuid,
@@ -268,3 +269,7 @@ create index if not exists jarvis_repo_action_proposals_project_created_at_idx
   on jarvis_repo_action_proposals(project_key, created_at desc);
 create index if not exists jarvis_repo_action_proposals_status_created_at_idx
   on jarvis_repo_action_proposals(status, created_at desc);
+
+
+alter table jarvis_repo_action_proposals
+  add column if not exists draft_metadata jsonb not null default '{}'::jsonb;

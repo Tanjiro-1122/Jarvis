@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   createRepoActionProposal,
+  draftRepoActionDiff,
   listRepoActionProposals,
   updateRepoActionStatus,
 } from "@/lib/repo-actions";
@@ -29,7 +30,8 @@ const CreateProposalSchema = z.object({
 
 const UpdateProposalSchema = z.object({
   id: z.string().min(1).max(120),
-  status: z.enum(["approved", "rejected", "blocked", "cancelled"]),
+  action: z.enum(["status", "draft_diff"]).default("status"),
+  status: z.enum(["approved", "rejected", "blocked", "cancelled"]).optional(),
   approvalNote: z.string().max(700).nullable().optional(),
 });
 
@@ -73,7 +75,23 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid repo action update.", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const result = await updateRepoActionStatus(parsed.data);
+  if (parsed.data.action === "draft_diff") {
+    const result = await draftRepoActionDiff({ id: parsed.data.id });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error ?? "Failed to draft diff." }, { status: 500 });
+    }
+    return NextResponse.json(result);
+  }
+
+  if (!parsed.data.status) {
+    return NextResponse.json({ error: "Status is required for this update." }, { status: 400 });
+  }
+
+  const result = await updateRepoActionStatus({
+    id: parsed.data.id,
+    status: parsed.data.status,
+    approvalNote: parsed.data.approvalNote,
+  });
   if (!result.ok) {
     return NextResponse.json({ error: result.error ?? "Failed to update proposal." }, { status: 500 });
   }

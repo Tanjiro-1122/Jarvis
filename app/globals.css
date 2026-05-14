@@ -1388,3 +1388,21 @@ body::before {
     transform: translateY(0);
   }
 }
+
+/* Patch 8: repo diff drafting */
+.repo-file-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.repo-file-targets span {
+  border: 1px solid rgba(125, 211, 252, 0.14);
+  background: rgba(56, 189, 248, 0.07);
+  color: rgba(226, 234, 255, 0.72);
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 5px 7px;
+}
