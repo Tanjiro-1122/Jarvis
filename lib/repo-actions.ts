@@ -1,3 +1,8 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawn } from "node:child_process";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { Octokit } from "@octokit/rest";
@@ -201,6 +206,65 @@ function parseUnifiedDiff(preview: string): ParsedDiffFile[] {
   }
 
   return files;
+}
+
+
+function getAllowedRepoSlugs() {
+  const configured = (process.env.JARVIS_ALLOWED_REPOS || "")
+    .split(",")
+    .map((repo) => repo.trim())
+    .filter(Boolean);
+  return new Set([DEFAULT_REPO, process.env.JARVIS_GITHUB_REPO || DEFAULT_REPO, ...configured].map((repo) => getRepoParts(repo).slug.toLowerCase()));
+}
+
+function isRepoAllowed(repoSlug: string) {
+  return getAllowedRepoSlugs().has(getRepoParts(repoSlug).slug.toLowerCase());
+}
+
+function getAuthenticatedCloneUrl(slug: string) {
+  const token = process.env.GITHUB_TOKEN || process.env.JARVIS_GITHUB_TOKEN;
+  if (token) return `https://x-access-token:${encodeURIComponent(token)}@github.com/${slug}.git`;
+  return `https://github.com/${slug}.git`;
+}
+
+function redactedCommandOutput(value: string, maxChars = 9000) {
+  const secrets = [process.env.GITHUB_TOKEN, process.env.JARVIS_GITHUB_TOKEN, process.env.OPENAI_API_KEY, process.env.SUPABASE_SERVICE_ROLE_KEY]
+    .filter((item): item is string => Boolean(item));
+  let text = value;
+  for (const secret of secrets) text = text.split(secret).join("[redacted]");
+  text = text.replace(/x-access-token:[^@\s]+@github\.com/gi, "x-access-token:[redacted]@github.com");
+  return cleanMultiline(text, maxChars);
+}
+
+function runCommand(command: string, args: string[], cwd: string, timeoutMs = 120000): Promise<{ ok: boolean; code: number | null; output: string; durationMs: number }> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const child = spawn(command, args, {
+      cwd,
+      env: {
+        ...process.env,
+        CI: "1",
+        NEXT_TELEMETRY_DISABLED: "1",
+      },
+      shell: false,
+    });
+    let output = "";
+    const timer = setTimeout(() => {
+      output += `\n[Jarvis sandbox] Command timed out after ${timeoutMs}ms and was stopped.`;
+      child.kill("SIGTERM");
+    }, timeoutMs);
+
+    child.stdout.on("data", (data) => { output += data.toString(); });
+    child.stderr.on("data", (data) => { output += data.toString(); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({ ok: false, code: null, output: redactedCommandOutput(`${output}\n${error.message}`), durationMs: Date.now() - started });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ ok: code === 0, code, output: redactedCommandOutput(output), durationMs: Date.now() - started });
+    });
+  });
 }
 
 function detectSandboxRisks(files: ParsedDiffFile[], diffBody: string) {
@@ -936,6 +1000,161 @@ export async function sandboxCheckRepoActionDiff(options: { id: string }) {
   });
 
   return { ok: true, proposal: updated, ready, risks, warnings };
+}
+
+
+export async function runTemporaryWorkspaceBuildCheck(options: { id: string }) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured." };
+
+  const id = cleanText(options.id, 120);
+  if (!id) return { ok: false, error: "Proposal id is required." };
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !existing) {
+    logError("repoActions.runTemporaryWorkspaceBuildCheck.fetch", fetchError);
+    return { ok: false, error: fetchError?.message ?? "Proposal not found." };
+  }
+
+  const proposal = existing as RepoActionProposalRow;
+  if (["rejected", "blocked", "cancelled", "executed"].includes(proposal.status)) {
+    return { ok: false, error: `Cannot run a temp workspace check for a ${proposal.status} proposal.` };
+  }
+  const metadata = proposal.draft_metadata || {};
+  if (!metadata.sandbox_checked_at) {
+    return { ok: false, error: "Run Sandbox check before the temporary workspace build check." };
+  }
+  if (!proposal.diff_preview || !proposal.diff_preview.includes("diff")) {
+    return { ok: false, error: "No generated diff found. Generate a diff and run Sandbox check first." };
+  }
+
+  const { slug } = getRepoParts(proposal.repo);
+  if (!isRepoAllowed(slug)) {
+    return { ok: false, error: `Repo ${slug} is not allowlisted. Set JARVIS_ALLOWED_REPOS before sandbox execution.` };
+  }
+
+  const diffBody = extractDiffBody(proposal.diff_preview);
+  const parsedFiles = parseUnifiedDiff(proposal.diff_preview);
+  if (!parsedFiles.length) {
+    return { ok: false, error: "No parseable unified diff files found." };
+  }
+
+  const now = new Date().toISOString();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "jarvis-sandbox-"));
+  const repoDir = path.join(tempRoot, "repo");
+  const diffPath = path.join(tempRoot, "proposal.patch");
+  const steps: Array<{ step: string; ok: boolean; code: number | null; durationMs: number; output: string }> = [];
+  let ready = false;
+  let cleanupOk = false;
+
+  try {
+    await writeFile(diffPath, diffBody, "utf8");
+
+    const clone = await runCommand("git", ["clone", "--depth", "1", getAuthenticatedCloneUrl(slug), repoDir], tempRoot, 120000);
+    steps.push({ step: "git clone", ...clone });
+    if (!clone.ok) throw new Error("Temporary clone failed.");
+
+    const applyCheck = await runCommand("git", ["apply", "--check", diffPath], repoDir, 60000);
+    steps.push({ step: "git apply --check", ...applyCheck });
+    if (!applyCheck.ok) throw new Error("Patch did not apply cleanly in the temporary workspace.");
+
+    const apply = await runCommand("git", ["apply", diffPath], repoDir, 60000);
+    steps.push({ step: "git apply", ...apply });
+    if (!apply.ok) throw new Error("Patch apply failed in the temporary workspace.");
+
+    const status = await runCommand("git", ["status", "--short"], repoDir, 30000);
+    steps.push({ step: "git status --short", ...status });
+
+    if (existsSync(path.join(repoDir, "package.json"))) {
+      if (existsSync(path.join(repoDir, "package-lock.json"))) {
+        const install = await runCommand("npm", ["ci", "--ignore-scripts"], repoDir, Number(process.env.JARVIS_SANDBOX_INSTALL_TIMEOUT_MS || 180000));
+        steps.push({ step: "npm ci --ignore-scripts", ...install });
+        if (!install.ok) throw new Error("Dependency install failed in the temporary workspace.");
+      }
+
+      const build = await runCommand("npm", ["run", "build", "--if-present"], repoDir, Number(process.env.JARVIS_SANDBOX_BUILD_TIMEOUT_MS || 180000));
+      steps.push({ step: "npm run build --if-present", ...build });
+      if (!build.ok) throw new Error("Build failed in the temporary workspace.");
+    } else {
+      steps.push({ step: "build detection", ok: true, code: 0, durationMs: 0, output: "No package.json found; build command skipped." });
+    }
+
+    ready = true;
+  } catch (error) {
+    steps.push({ step: "sandbox result", ok: false, code: null, durationMs: 0, output: error instanceof Error ? error.message : "Temporary workspace check failed." });
+  } finally {
+    try {
+      await rm(tempRoot, { recursive: true, force: true });
+      cleanupOk = true;
+    } catch (error) {
+      logError("repoActions.runTemporaryWorkspaceBuildCheck.cleanup", error);
+    }
+  }
+
+  const report = [
+    `# Temporary workspace build check — ${proposal.title}`,
+    `Repo: ${slug}`,
+    `Checked: ${now}`,
+    `Result: ${ready ? "PASSED" : "FAILED / NEEDS REVIEW"}`,
+    `Cleanup: ${cleanupOk ? "temporary workspace removed" : "cleanup warning logged"}`,
+    "",
+    "This check cloned the repo into a temporary server workspace, applied the proposed diff locally, ran validation/build commands, then removed the temporary folder.",
+    "No GitHub files were changed, no commit was created, no push occurred, and nothing was deployed.",
+    "",
+    "## Files rehearsed",
+    ...parsedFiles.map((file) => `- ${file.operation}: ${file.path} (+${file.additions}/-${file.deletions})`),
+    "",
+    "## Sandbox steps",
+    ...steps.map((step) => [`### ${step.ok ? "PASS" : "FAIL"} · ${step.step}`, `Duration: ${step.durationMs}ms`, "```", step.output || "No output.", "```", ""].join("\n")),
+    "## Proposed diff rehearsed",
+    "```diff",
+    diffBody,
+    "```",
+  ].join("\n");
+
+  const { data, error } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .update({
+      diff_preview: report,
+      draft_metadata: {
+        ...metadata,
+        temp_workspace_checked_at: now,
+        temp_workspace_ready: ready,
+        temp_workspace_cleanup_ok: cleanupOk,
+        temp_workspace_steps: steps.map((step) => ({ step: step.step, ok: step.ok, code: step.code, durationMs: step.durationMs, output: redactedCommandOutput(step.output, 2500) })),
+        safety: "temporary_workspace_only_no_commit_no_push_no_deploy",
+      },
+      updated_at: now,
+    })
+    .eq("id", id)
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .single();
+
+  if (error) {
+    logError("repoActions.runTemporaryWorkspaceBuildCheck.update", error);
+    return { ok: false, error: error.message };
+  }
+
+  const updated = data as RepoActionProposalRow;
+  await logActionEvent({
+    eventType: "repo_action.temp_workspace_checked",
+    summary: `Temp workspace check ${ready ? "passed" : "failed"}: ${updated.title}`,
+    status: ready ? "info" : "blocked",
+    approvalStage: "plan",
+    riskLevel: ready ? updated.risk_level : "high",
+    projectKey: updated.project_key,
+    sessionId: updated.session_id,
+    workspaceId: updated.workspace_id,
+    conversationId: updated.conversation_id,
+    metadata: { proposalId: updated.id, repo: slug, ready, cleanupOk, steps: steps.map((step) => ({ step: step.step, ok: step.ok, code: step.code, durationMs: step.durationMs })) },
+  });
+
+  return { ok: true, proposal: updated, ready, cleanupOk };
 }
 
 export async function updateRepoActionStatus(options: {

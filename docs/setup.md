@@ -629,3 +629,39 @@ The sandbox check:
 - does not deploy
 
 This is the final safety checkpoint before a future controlled execution path.
+
+
+## Temporary Workspace Build Check
+
+Patch 12 adds a controlled rehearsal step to Repo Control.
+
+Use the right-side filing cabinet:
+
+```txt
+Memory button → Repo drawer → Create/select proposal → Generate diff → Sandbox check → Temp build
+```
+
+The temp build check:
+
+- requires a prior sandbox check
+- only runs for allowlisted repos
+- clones the repo into a temporary server folder
+- writes the proposed diff to a temp patch file
+- runs `git apply --check`
+- applies the patch locally inside the temporary folder
+- runs `npm ci --ignore-scripts` when `package-lock.json` exists
+- runs `npm run build --if-present`
+- stores the full redacted report in `diff_preview`
+- logs `repo_action.temp_workspace_checked` in Activity Log
+- removes the temporary folder afterward
+- does not commit
+- does not push
+- does not deploy
+
+Recommended env:
+
+```txt
+JARVIS_ALLOWED_REPOS=Tanjiro-1122/Jarvis
+JARVIS_SANDBOX_INSTALL_TIMEOUT_MS=180000
+JARVIS_SANDBOX_BUILD_TIMEOUT_MS=180000
+```

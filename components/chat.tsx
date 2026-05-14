@@ -1251,6 +1251,32 @@ export function Chat() {
   }
 
 
+  async function runTempWorkspaceCheck(proposal: RepoActionProposalSummary) {
+    if (repoProposalBusy) return;
+    const confirmed = window.confirm(`Run a temporary workspace build check?\n\n${proposal.title}\n\nJarvis will clone the allowlisted repo into a temporary server folder, apply the proposed diff locally, run validation/build, then delete the folder. No commit, push, or deploy will happen.`);
+    if (!confirmed) return;
+
+    setRepoProposalBusy(true);
+    setRepoProposalStatus("");
+    try {
+      const response = await fetch("/api/repo-actions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposal.id, action: "temp_workspace_check" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; ready?: boolean };
+      if (!response.ok) throw new Error(payload.error ?? "Failed to run temporary workspace check.");
+      setRepoProposalStatus(payload.ready ? "Temporary workspace build passed. Review before approval." : "Temporary workspace check failed or needs review.");
+      await refreshRepoProposals(selectedProjectKey);
+      await refreshActionEvents(memoryProjectKey);
+    } catch (error) {
+      setRepoProposalStatus(error instanceof Error ? error.message : "Failed to run temporary workspace check.");
+    } finally {
+      setRepoProposalBusy(false);
+    }
+  }
+
+
   async function refreshDeployHealth() {
     setDeployHealthBusy(true);
     setDeployHealthStatus("");
@@ -2618,6 +2644,14 @@ export function Chat() {
                             disabled={repoProposalBusy}
                           >
                             Sandbox check
+                          </button>
+                          <button
+                            type="button"
+                            className="memory-inline-action"
+                            onClick={() => runTempWorkspaceCheck(proposal)}
+                            disabled={repoProposalBusy}
+                          >
+                            Temp build
                           </button>
                           {(proposal.status === "proposed" || proposal.status === "draft") && (
                           <button
