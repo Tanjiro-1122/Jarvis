@@ -4027,3 +4027,491 @@ body::after {
     display: none !important;
   }
 }
+
+/* Patch 35: iPhone Safari layout repair + login/tools polish */
+.login-form {
+  width: min(672px, calc(100vw - 42px)) !important;
+  padding: clamp(18px, 4vw, 30px) !important;
+  border-radius: 30px !important;
+  border: 1px solid rgba(100,116,166,0.18) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(255,255,255,0.62)) !important;
+  box-shadow: 0 28px 90px rgba(62,77,128,0.22), inset 0 1px 0 rgba(255,255,255,0.86) !important;
+  backdrop-filter: blur(26px) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.18) !important;
+}
+
+.login-form .chat-input {
+  width: 100% !important;
+  min-height: 54px !important;
+  padding: 0 18px !important;
+  border-radius: 19px !important;
+  color: #17213f !important;
+  -webkit-text-fill-color: #17213f !important;
+  caret-color: #7657ff !important;
+  background: rgba(255,255,255,0.88) !important;
+  border: 1px solid rgba(100,116,166,0.22) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.92) !important;
+}
+
+.login-form .chat-input::placeholder {
+  color: rgba(42,55,91,0.48) !important;
+  -webkit-text-fill-color: rgba(42,55,91,0.48) !important;
+}
+
+.login-form .send-button {
+  width: 100% !important;
+  min-height: 50px !important;
+}
+
+.context-sidebar.context-sidebar--open {
+  overflow: hidden !important;
+}
+
+.context-panel {
+  height: 100% !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  align-content: stretch !important;
+  overflow: hidden !important;
+}
+
+.glass-drawer-titlebar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important;
+  margin: -18px -18px 12px !important;
+  padding: 18px !important;
+}
+
+.context-panel-section {
+  overflow: visible !important;
+}
+
+.context-panel > .context-panel-section,
+.context-panel > .drawer-tab-strip,
+.context-panel > .filing-cabinet-tabs,
+.context-panel > :not(.glass-drawer-titlebar) {
+  min-width: 0 !important;
+}
+
+.project-switchboard-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.project-switchboard-card {
+  min-width: 0 !important;
+  min-height: 68px !important;
+}
+
+.filing-cabinet-tabs,
+.drawer-tabs,
+.tool-tabs,
+.context-tabs,
+.open-drawer-tabs,
+[role="tablist"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  padding: 10px !important;
+  border-radius: 22px !important;
+  background: rgba(23,33,63,0.9) !important;
+  box-shadow: 0 18px 44px rgba(23,33,63,0.22) !important;
+}
+
+.filing-cabinet-tabs button,
+.drawer-tabs button,
+.tool-tabs button,
+.context-tabs button,
+.open-drawer-tabs button,
+[role="tablist"] button {
+  flex: 0 1 auto !important;
+  min-width: 76px !important;
+  min-height: 38px !important;
+  border-radius: 16px !important;
+  color: #f8fbff !important;
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+.context-panel input,
+.context-panel textarea,
+.context-panel select {
+  color: #17213f !important;
+  -webkit-text-fill-color: #17213f !important;
+  background: rgba(255,255,255,0.78) !important;
+  border-color: rgba(100,116,166,0.2) !important;
+}
+
+.context-panel input::placeholder,
+.context-panel textarea::placeholder {
+  color: rgba(42,55,91,0.45) !important;
+  -webkit-text-fill-color: rgba(42,55,91,0.45) !important;
+}
+
+.deploy-health-item,
+.health-check-item,
+.repo-proposal-card,
+.memory-card,
+.document-card,
+.artifact-card,
+.context-empty {
+  color: #17213f !important;
+  background: rgba(255,255,255,0.66) !important;
+  border-color: rgba(100,116,166,0.16) !important;
+}
+
+@supports (-webkit-touch-callout: none) {
+  html,
+  body {
+    height: -webkit-fill-available !important;
+  }
+
+  .workspace-home {
+    min-height: -webkit-fill-available !important;
+  }
+}
+
+@media (max-width: 820px) {
+  html,
+  body {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .page {
+    min-height: 100dvh !important;
+    padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom)) !important;
+    display: grid !important;
+    align-content: center !important;
+  }
+
+  .hero {
+    width: min(100%, 390px) !important;
+    margin: 0 auto 16px !important;
+    align-items: baseline !important;
+  }
+
+  .hero h1 {
+    font-size: 44px !important;
+    color: #17213f !important;
+  }
+
+  .chat-shell {
+    width: min(100%, 390px) !important;
+    margin: 0 auto !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .login-form {
+    width: 100% !important;
+    padding: 18px !important;
+  }
+
+  .workspace-home {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+
+  .workspace-app,
+  .workspace-app:not(:has(.context-sidebar)) {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .chat-panel {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    display: grid !important;
+    grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+    overflow: hidden !important;
+  }
+
+  .chat-header--workspace {
+    min-height: calc(58px + env(safe-area-inset-top)) !important;
+    padding: calc(8px + env(safe-area-inset-top)) 14px 8px !important;
+    grid-template-columns: 44px minmax(0, 1fr) auto !important;
+    background: rgba(255,255,255,0.68) !important;
+    backdrop-filter: blur(22px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.2) !important;
+  }
+
+  .chat-header-title {
+    font-size: 17px !important;
+  }
+
+  .chat-header-subtitle {
+    font-size: 11px !important;
+  }
+
+  .native-icon-button,
+  .native-tool-button {
+    min-width: 44px !important;
+    height: 44px !important;
+    border-radius: 18px !important;
+    box-shadow: 0 10px 24px rgba(62,77,128,0.16), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+  }
+
+  .native-tool-button {
+    padding: 0 14px !important;
+    font-size: 13px !important;
+  }
+
+  .native-status-strip {
+    min-height: 38px !important;
+    padding: 7px 10px 6px !important;
+    background: rgba(255,255,255,0.34) !important;
+    border-bottom: 1px solid rgba(100,116,166,0.12) !important;
+  }
+
+  .messages {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    flex: initial !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    padding: 14px 14px 14px !important;
+    gap: 12px !important;
+    scroll-padding-bottom: 96px !important;
+  }
+
+  .message {
+    width: fit-content !important;
+    max-width: min(86vw, 380px) !important;
+    padding: 13px 15px !important;
+    border-radius: 21px !important;
+    overflow: visible !important;
+    transform: translateZ(0) !important;
+  }
+
+  .message.user {
+    max-width: min(84vw, 370px) !important;
+    border-bottom-right-radius: 8px !important;
+  }
+
+  .message.assistant {
+    max-width: min(84vw, 370px) !important;
+    border-bottom-left-radius: 8px !important;
+    background: rgba(255,255,255,0.7) !important;
+  }
+
+  .message-content,
+  .markdown-body,
+  .message-content p {
+    font-size: 15.5px !important;
+    line-height: 1.5 !important;
+  }
+
+  .message-role-row {
+    margin-bottom: 6px !important;
+  }
+
+  .input-form {
+    position: relative !important;
+    z-index: 30 !important;
+    width: calc(100vw - 18px) !important;
+    min-height: 62px !important;
+    margin: 0 9px calc(7px + env(safe-area-inset-bottom)) !important;
+    padding: 8px !important;
+    grid-template-columns: 44px minmax(0, 1fr) 54px !important;
+    border-radius: 30px !important;
+    background: rgba(255,255,255,0.78) !important;
+    backdrop-filter: blur(22px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.2) !important;
+  }
+
+  .attach-button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .chat-input {
+    min-height: 44px !important;
+    padding: 10px 6px !important;
+    font-size: 16px !important;
+  }
+
+  .send-button[type="submit"] {
+    width: 54px !important;
+    min-width: 54px !important;
+    height: 48px !important;
+    border-radius: 22px !important;
+    padding: 0 !important;
+    font-size: 0 !important;
+  }
+
+  .send-button[type="submit"]::before {
+    content: "↑" !important;
+    font-size: 27px !important;
+    line-height: 1 !important;
+  }
+
+  .drawer-backdrop,
+  .tools-drawer-backdrop,
+  .workspace-drawer-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 900000 !important;
+    background: rgba(226,232,255,0.54) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+  }
+
+  .context-sidebar.context-sidebar--open,
+  .workspace-sidebar.workspace-sidebar--open {
+    position: fixed !important;
+    top: calc(env(safe-area-inset-top) + 8px) !important;
+    right: 8px !important;
+    bottom: calc(env(safe-area-inset-bottom) + 8px) !important;
+    left: 8px !important;
+    z-index: 900010 !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    display: block !important;
+    padding: 16px !important;
+    border-radius: 28px !important;
+    overflow: hidden !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(245,248,255,0.84)) !important;
+  }
+
+  .context-panel {
+    height: 100% !important;
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    gap: 12px !important;
+    padding: 0 !important;
+  }
+
+  .glass-drawer-titlebar {
+    flex: 0 0 auto !important;
+    position: sticky !important;
+    top: 0 !important;
+    margin: -16px -16px 4px !important;
+    padding: 16px !important;
+    background: rgba(255,255,255,0.92) !important;
+  }
+
+  .glass-drawer-titlebar button {
+    min-height: 42px !important;
+    padding: 0 15px !important;
+    color: #17213f !important;
+    background: rgba(255,255,255,0.8) !important;
+  }
+
+  .context-panel-section {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 16px !important;
+    border-radius: 22px !important;
+    overflow: visible !important;
+  }
+
+  .context-panel-header,
+  .conversation-sidebar-header {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .side-section-label {
+    font-size: 11px !important;
+    color: rgba(42,55,91,0.52) !important;
+  }
+
+  .side-section-copy {
+    font-size: 13px !important;
+    line-height: 1.42 !important;
+  }
+
+  .project-switchboard-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  .project-switchboard-card {
+    min-height: 66px !important;
+    padding: 12px !important;
+  }
+
+  .project-switchboard-current {
+    margin-top: 10px !important;
+    padding: 14px !important;
+  }
+
+  .filing-cabinet-tabs,
+  .drawer-tabs,
+  .tool-tabs,
+  .context-tabs,
+  .open-drawer-tabs,
+  [role="tablist"] {
+    position: sticky !important;
+    top: 64px !important;
+    z-index: 30 !important;
+    width: 100% !important;
+    margin: 0 0 4px !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    padding: 10px !important;
+    border-radius: 22px !important;
+    background: #17213f !important;
+  }
+
+  .filing-cabinet-tabs button,
+  .drawer-tabs button,
+  .tool-tabs button,
+  .context-tabs button,
+  .open-drawer-tabs button,
+  [role="tablist"] button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 38px !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+    color: #ffffff !important;
+  }
+
+  .context-panel input,
+  .context-panel textarea,
+  .context-panel select {
+    min-height: 44px !important;
+    border-radius: 16px !important;
+    font-size: 16px !important;
+  }
+}
