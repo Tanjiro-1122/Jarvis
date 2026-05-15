@@ -30,6 +30,8 @@ const TOOL_LABELS: Record<string, string> = {
   create_task_plan: "Planning task",
   web_search: "Searching the web",
   analyze_github_repo: "Analyzing GitHub repo",
+  get_jarvis_capability_snapshot: "Checking Jarvis capabilities",
+  get_jarvis_self_audit_snapshot: "Running Jarvis self-audit",
   execute_code: "Running code",
   listRepositoryTree: "Scanning repository file structure...",
   readRepositoryFile: "Reading code file content...",

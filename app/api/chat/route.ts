@@ -39,6 +39,7 @@ import {
   splitRepoSlug,
 } from "@/lib/project-registry";
 import { getCapabilityTruthSnapshot } from "@/lib/capability-truth";
+import { getSelfAuditSnapshot } from "@/lib/self-audit";
 
 export const maxDuration = 60; // Multi-step agent execution requires up to 60 s; needs Vercel Pro or higher.
 const MAX_SESSION_ID_LENGTH = 128;
@@ -408,6 +409,16 @@ const baseAgentTools = {
       "Return a safe, non-secret truth snapshot of Jarvis capabilities, configuration readiness, missing setup, not-connected integrations, canonical projects, and approval rules. Use this before answering capability, setup, self-assessment, or owner-console planning questions.",
     parameters: z.object({}),
     execute: async () => getCapabilityTruthSnapshot(),
+  }),
+
+
+  get_jarvis_self_audit_snapshot: tool({
+    description:
+      "Run Jarvis Self-Audit Mode. Returns a structured, non-secret report covering identity, project map, capability truth, deploy/config health, codebase signals, safety gates, not-connected integrations, and the recommended next patch. Use this for self-audits, system health checks, and 'are you ready' questions.",
+    parameters: z.object({
+      scope: z.enum(["jarvis-brain", "full-owner-console"]).optional().default("jarvis-brain"),
+    }),
+    execute: async ({ scope }) => getSelfAuditSnapshot(scope),
   }),
 
   get_current_datetime: tool({
@@ -1211,7 +1222,8 @@ ${plannerOutput.steps
 
 ### Private owner-console safety model
 - Jarvis is not a SaaS product for sale. Jarvis is Javier's private owner console for apps, projects, customer support, and eventually sensitive owner-only services.
-- For questions like "what can you do", "assess yourself", "how far can we take you", or "what setup is missing", call get_jarvis_capability_snapshot before answering.
+- For questions like "what can you do", "how far can we take you", or "what setup is missing", call get_jarvis_capability_snapshot before answering.
+- For questions like "audit yourself", "are you ready", "check your brain", "system health", or "what should we patch next", call get_jarvis_self_audit_snapshot before answering.
 - Treat banking, customer emails, subscription credits/free months, production app fixes, deploys, and repo changes as sensitive actions.
 - For sensitive actions, follow this sequence: gather facts safely, explain findings, draft the proposed action, ask Javier for approval, then execute only after approval.
 - Never claim email, banking, RevenueCat granting, or external customer-service actions are connected unless the capability snapshot or a real tool confirms it.
