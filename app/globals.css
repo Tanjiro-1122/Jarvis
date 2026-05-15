@@ -2936,3 +2936,76 @@ body {
     max-width: 86% !important;
   }
 }
+
+/* Patch 31 hotfix 2: make native drawers reliably clickable and visible */
+.native-tool-button,
+.native-icon-button {
+  position: relative !important;
+  z-index: 95 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.context-sidebar,
+.context-sidebar--open,
+.workspace-sidebar,
+.workspace-sidebar--open {
+  display: block !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
+.context-sidebar.context-sidebar--open {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: auto !important;
+  z-index: 120 !important;
+  width: min(430px, 92vw) !important;
+  max-width: 430px !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  transform: translateX(0) !important;
+  opacity: 1 !important;
+  overflow-y: auto !important;
+}
+
+.workspace-sidebar.workspace-sidebar--open {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  right: auto !important;
+  z-index: 120 !important;
+  width: min(390px, 92vw) !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  transform: translateX(0) !important;
+  opacity: 1 !important;
+  overflow-y: auto !important;
+}
+
+.drawer-backdrop {
+  z-index: 110 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.tools-drawer-backdrop + .context-sidebar--open,
+.workspace-drawer-backdrop + .workspace-sidebar--open {
+  z-index: 121 !important;
+}
+
+.context-panel {
+  min-height: 100% !important;
+  width: 100% !important;
+}
+
+@media (max-width: 760px) {
+  .context-sidebar.context-sidebar--open,
+  .workspace-sidebar.workspace-sidebar--open {
+    width: min(100vw, 430px) !important;
+    max-width: none !important;
+  }
+}
