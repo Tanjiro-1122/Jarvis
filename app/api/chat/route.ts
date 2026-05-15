@@ -17,6 +17,7 @@ import {
   saveConversationExchange,
 } from "@/lib/workspaces";
 import { logError } from "@/lib/errors";
+import { buildAgentWorkLoopSnapshot, formatAgentWorkLoopPromptSection } from "@/lib/agent-work-loop";
 import { getOwnerMemorySection } from "@/lib/owner-memory";
 import { buildSupabaseMemorySection } from "@/lib/memory";
 import {
@@ -41,6 +42,7 @@ import {
 } from "@/lib/project-registry";
 import { getCapabilityTruthSnapshot } from "@/lib/capability-truth";
 import { getSelfAuditSnapshot } from "@/lib/self-audit";
+import { createRepoActionProposal } from "@/lib/repo-actions";
 
 export const maxDuration = 60; // Multi-step agent execution requires up to 60 s; needs Vercel Pro or higher.
 const MAX_SESSION_ID_LENGTH = 128;
@@ -833,6 +835,64 @@ function getAgentTools({
 }) {
   return {
     ...baseAgentTools,
+
+    create_repo_action_proposal: tool({
+      description:
+        "Create a Repo Control proposal for repo/app/code changes after inspecting the repository and explaining Findings → Plan. This records the proposal only; it does not edit files, commit, deploy, or open a PR.",
+      parameters: z.object({
+        title: z.string().min(1).max(180),
+        summary: z.string().min(1).max(900),
+        findings: z.string().max(6000).optional(),
+        plan: z.string().max(6000).optional(),
+        repo: z.string().max(160).optional(),
+        projectKey: z.string().max(80).optional(),
+        riskLevel: z.enum(["low", "medium", "high"]).optional().default("medium"),
+        files: z
+          .array(
+            z.object({
+              path: z.string().min(1).max(240),
+              operation: z.enum(["create", "update", "delete", "inspect"]).optional(),
+              note: z.string().max(500).optional(),
+            })
+          )
+          .max(20)
+          .optional(),
+        diffPreview: z.string().max(10000).optional(),
+      }),
+      execute: async ({ title, summary, findings, plan, repo, projectKey, riskLevel, files, diffPreview }) => {
+        const result = await createRepoActionProposal({
+          title,
+          summary,
+          findings,
+          plan,
+          repo: repo || null,
+          projectKey: projectKey || null,
+          riskLevel,
+          files,
+          diffPreview,
+          sessionId: null,
+          workspaceId: workspaceId ?? null,
+          conversationId: conversationId ?? null,
+        });
+        if (!result.ok || !result.proposal) {
+          return {
+            success: false,
+            error: result.error || "Repo Control proposal could not be created.",
+            message: "No code was changed.",
+          };
+        }
+        const proposal = result.proposal;
+        return {
+          success: true,
+          proposalId: proposal.id,
+          status: proposal.status,
+          repo: proposal.repo,
+          projectKey: proposal.project_key,
+          riskLevel: proposal.risk_level,
+          message: "Repo Control proposal created. No code was changed yet.",
+        };
+      },
+    }),
     execute_code: tool({
       description:
         "Run a short, self-contained JavaScript or TypeScript snippet inside Jarvis's sandbox. Use for small coding checks, evaluating generated code, quick data transforms, algorithm verification, and generating downloadable text artifacts (CSV, JSON, SVG, HTML, Markdown). The snippet must be self-contained, must not use imports or external modules, and should use `return` to surface a final value. Console output and artifacts are returned to the chat UI.",
@@ -1071,6 +1131,12 @@ export async function POST(req: Request) {
       latestUserText,
       codeExecution.available
     )}`;
+    const agentWorkLoop = buildAgentWorkLoopSnapshot({
+      input: latestUserText,
+      intent: plannerOutput.intent,
+      reasoningRoute: plannerOutput.reasoningRoute,
+    });
+    const agentWorkLoopSection = formatAgentWorkLoopPromptSection(agentWorkLoop);
     let taskId = resumeTaskId ?? null;
 
     if (taskId) {
@@ -1103,7 +1169,7 @@ export async function POST(req: Request) {
         taskId,
         stepKey: "capture_request",
         status: "completed",
-        detail: `Intent detected: ${plannerOutput.intent}.`,
+        detail: `${agentWorkLoop.progressLabel}. Intent: ${plannerOutput.intent}; route: ${plannerOutput.reasoningRoute}.`,
         progress: 18,
       });
       await updateWorkspaceTaskStep({
@@ -1228,6 +1294,8 @@ ${ownerMemorySection}` : ""}
 ${supabaseMemorySection ? `
 ${supabaseMemorySection}` : ""}
 
+${agentWorkLoopSection}
+
 ## Planner / Executor
 - Intent: ${plannerOutput.intent}
 - Reasoning route: ${plannerOutput.reasoningRoute}
@@ -1261,6 +1329,7 @@ ${plannerOutput.steps
 - Never prove Jarvis platform capabilities by creating fake/simulated JavaScript objects that say systems are operational. That is not a real diagnostic.
 - For Jarvis self-audits, use real available endpoints/tools where available, or clearly label the result as "not verified" with the exact missing check. Be brutally honest.
 - Follow the Reasoning Router route. If it says approval_required or proposal_required, do not skip straight to execution even if Javier gave broad phase approval; external/sensitive actions still need exact-action approval.
+- Agent Core v1 rule: inspect → plan → propose before code changes. Avoid generic audit prose when a real repository inspection is available.
 - If a user asks what works, separate: verified, partially wired, requires environment variables/schema, and not connected yet.
 - Do not call sandboxed code a test of Supabase, Vercel, GitHub, memory, files, or runner health unless the code actually contacted the relevant system.
 - Do NOT use generic disclaimers such as "I can't access the internet" or "I have no access to external systems" as blanket statements

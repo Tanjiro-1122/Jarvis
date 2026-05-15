@@ -46,12 +46,31 @@ export type ReasoningRoute =
   | "approval_required"
   | "not_connected";
 
+
+const SELF_AUDIT_PATTERN = /\b(self\s*-?\s*audit|audit yourself|system health|are you ready|check your brain|brain check|readiness report|what should we patch next)\b/i;
+const CAPABILITY_TRUTH_PATTERN = /\b(what can you actually do|what can you do|what is connected|what's connected|anything missing|what is missing|what's missing|setup missing|capabilities|capability|how far can we take you|fully set up)\b/i;
+const SENSITIVE_ACTION_PATTERN = /\b(send email|email customer|reply to customer|grant free|grant credit|free month|refund|charge|bank transfer|bill payment|move money|delete production|push to production|open pr|pull request|commit|merge)\b/i;
+const DEPLOY_ACTION_PATTERN = /\b(deploy|deployment|rollback|redeploy)\b/i;
+const NOT_CONNECTED_PATTERN = /\b(bank|banking|bank of america|gmail|outlook|customer inbox|revenuecat admin|app store connect|google play console|play console|send customer email)\b/i;
+const REPO_CHANGE_VERB_PATTERN = /\b(fix|patch|change|modify|update|implement|add|remove|refactor|finish|build)\b/i;
+const REPO_SCOPE_PATTERN = /\b(repo|repository|code|jarvis|unfiltr|swh|family|app|site|ui|router|agent|core|workflow)\b/i;
+const EXPLICIT_CALC_PATTERN = /\b(calculate|compute|solve|math|arithmetic|percentage|percent|tip|total|sum|convert)\b/i;
+const NUMERIC_EXPRESSION_PATTERN = /\d\s*[+\-*/^%]\s*\d|\(\s*\d[\d\s+\-*/^%.()]*\)/;
+
+export function needsRepositoryInspection(input: string) {
+  const lower = input.toLowerCase();
+  return (
+    (REPO_CHANGE_VERB_PATTERN.test(lower) && REPO_SCOPE_PATTERN.test(lower)) ||
+    /\b(error|bug|broken|not working|fails|failed|issue|problem)\b/i.test(lower) ||
+    (/\b(inspect|review|audit|look at|check)\b/i.test(lower) && REPO_SCOPE_PATTERN.test(lower))
+  );
+}
+
 /**
  * Detect the primary tool intent from the latest user message.
  *
- * The ordering of checks below is intentional — more specific patterns are
- * tested first so that a message containing both a code block and a search
- * keyword routes to code execution, not web search.
+ * Agent Core v1 uses defensive ordering: Brain/control-plane routes win over
+ * search and calculator, and repo/app work defaults to inspection/proposal.
  */
 export function detectToolIntent(
   input: string,
@@ -62,46 +81,24 @@ export function detectToolIntent(
   const lower = input.toLowerCase();
 
   // ── Brain/control-plane routing ─────────────────────────────────────────
-  if (/(self[- ]?audit|audit yourself|system health|are you ready|check your brain|what should we patch next|brain check|readiness report)/.test(lower)) {
-    return "self_audit";
-  }
-
-  if (/(what can you actually do|what can you do|what is connected|what's connected|what is missing|what's missing|setup missing|capabilities|capability|how far can we take you|are you fully set up)/.test(lower)) {
-    return "capability_truth";
-  }
-
-  if (/(send email|email customer|reply to customer|grant free|grant credit|free month|refund|charge|bank transfer|bill payment|move money|delete production|deploy|push to production|open pr|pull request|commit|merge)/.test(lower)) {
-    return "approval_required";
-  }
-
-  if (/(bank|banking|bank of america|gmail|outlook|customer inbox|revenuecat admin|app store connect|google play console|play console|send customer email)/.test(lower)) {
-    return "not_connected";
-  }
-
-  if (/(fix|patch|change|modify|update|implement|add|remove|refactor)/.test(lower) && /(repo|repository|code|jarvis|unfiltr|swh|family|app)/.test(lower)) {
-    return "repo_proposal";
-  }
+  if (SELF_AUDIT_PATTERN.test(lower)) return "self_audit";
+  if (CAPABILITY_TRUTH_PATTERN.test(lower)) return "capability_truth";
+  if (SENSITIVE_ACTION_PATTERN.test(lower) || DEPLOY_ACTION_PATTERN.test(lower)) return "approval_required";
+  if (NOT_CONNECTED_PATTERN.test(lower)) return "not_connected";
+  if (needsRepositoryInspection(input)) return "repo_proposal";
 
   // ── Code execution ──────────────────────────────────────────────────────
   if (capabilities.codeExecution.available) {
     const hasCodeBlock = /```[\s\S]*?```/.test(input);
-    const executionVerb =
-      /\b(run|execute|test|simulate|debug|benchmark|profile|check|evaluate)\b/.test(lower);
-    const executionNoun =
-      /\b(code|snippet|script|function|algorithm|javascript|typescript|js|ts|loop)\b/.test(lower);
+    const executionVerb = /\b(run|execute|test|simulate|debug|benchmark|profile|check|evaluate)\b/.test(lower);
+    const executionNoun = /\b(code|snippet|script|function|algorithm|javascript|typescript|js|ts|loop)\b/.test(lower);
     const artifactIntent =
       /\b(create|generate|produce|build|export)\b/.test(lower) &&
       /\b(artifact|file|download|csv|json|report|output|svg|chart|diagram)\b/.test(lower) &&
       /\b(code|snippet|script|javascript|typescript|js|ts)\b/.test(lower);
-    // Purely explanatory requests should not trigger execution
-    const explainOnly =
-      /\b(explain|review|summarize|understand|what does|why does)\b/.test(lower) &&
-      !executionVerb;
+    const explainOnly = /\b(explain|review|summarize|understand|what does|why does)\b/.test(lower) && !executionVerb;
 
-    if (
-      !explainOnly &&
-      (hasCodeBlock || artifactIntent || (executionVerb && executionNoun))
-    ) {
+    if (!explainOnly && (hasCodeBlock || artifactIntent || (executionVerb && executionNoun))) {
       return "code_execution";
     }
   }
@@ -109,54 +106,34 @@ export function detectToolIntent(
   // ── GitHub analysis ─────────────────────────────────────────────────────
   if (capabilities.githubAnalysis) {
     const hasGitHubUrl = /github\.com\/[^\s/]+\/[^\s/]+/.test(input);
-    const ownedRepo =
-      /\b[a-z0-9_-]{1,39}\/[a-z0-9_.-]{1,100}\b/i.test(input);
-    const analyzeVerb =
-      /\b(analyze|analyse|look at|check|review|explore|inspect|fetch)\b/.test(lower);
-    if (hasGitHubUrl || (ownedRepo && analyzeVerb)) {
-      return "github_analysis";
-    }
+    const ownedRepo = /\b[a-z0-9_-]{1,39}\/[a-z0-9_.-]{1,100}\b/i.test(input);
+    const analyzeVerb = /\b(analyze|analyse|look at|check|review|explore|inspect|fetch)\b/.test(lower);
+    if (hasGitHubUrl || (ownedRepo && analyzeVerb)) return "github_analysis";
   }
 
   // ── Web search ──────────────────────────────────────────────────────────
   if (capabilities.webSearch) {
-    const timeSignal =
-      /\b(latest|recent|current|today|now|news|update|release|this week|this month)\b/.test(lower);
-    const queryVerb =
-      /\b(search|find|look up|what is|who is|when did|where is|tell me about)\b/.test(lower);
-    // Require at least two independent search-like signals to reduce false positives
-    if (
-      (timeSignal && queryVerb) ||
-      (timeSignal &&
-        /\b(what|who|when|where|why|how)\b/.test(lower)) ||
-      /\b(search the web|search for|google|look up)\b/.test(lower)
-    ) {
+    const timeSignal = /\b(latest|recent|current|today|now|news|update|release|this week|this month)\b/.test(lower);
+    const queryVerb = /\b(search|find|look up|what is|who is|when did|where is|tell me about)\b/.test(lower);
+    if ((timeSignal && queryVerb) || (timeSignal && /\b(what|who|when|where|why|how)\b/.test(lower)) || /\b(search the web|search for|google|look up)\b/.test(lower)) {
       return "web_search";
     }
   }
 
   // ── Datetime ────────────────────────────────────────────────────────────
-  if (
-    /\b(what time|what date|today|day of week|current time|current date|right now|what day)\b/.test(
-      lower
-    )
-  ) {
+  if (/\b(what time|what date|today|day of week|current time|current date|right now|what day)\b/.test(lower)) {
     return "datetime";
   }
 
   // ── Calculate ───────────────────────────────────────────────────────────
-  if (
-    /\b(calculate|compute|how much|how many|convert|what is)\b/.test(lower) &&
-    /[\d+\-*/^%().]/.test(input)
-  ) {
+  // Require explicit math language or an actual numeric expression. This avoids
+  // routing "what is missing" / self-audit prompts to calculator.
+  if ((EXPLICIT_CALC_PATTERN.test(lower) || NUMERIC_EXPRESSION_PATTERN.test(input)) && /\d/.test(input)) {
     return "calculate";
   }
 
   // ── Plan ────────────────────────────────────────────────────────────────
-  if (
-    /\b(plan|steps|roadmap|outline|approach|walk me through|how do i|how to)\b/.test(lower) &&
-    input.trim().length > 30
-  ) {
+  if (/\b(plan|steps|roadmap|outline|approach|walk me through|how do i|how to)\b/.test(lower) && input.trim().length > 30) {
     return "plan";
   }
 

@@ -1,0 +1,21 @@
+# Jarvis Agent Core v1
+
+Agent Core v1 is the first quality upgrade after the Brain phase.
+
+## Included
+
+- Deterministic router priority so self-audit/capability questions cannot fall through to calculator.
+- Safer calculator routing: math requires explicit math language or a real numeric expression.
+- Mandatory repository-inspection signal for app/code/error/fix requests.
+- Agent Work Loop prompt section: understand → inspect → plan → propose → verify → respond.
+- Chat-accessible Repo Control proposal tool that creates approval records without changing code.
+- Cleaner progress labels for repo inspection and proposal creation.
+- Static router smoke test via `npm run test:router`.
+
+## Still not included
+
+- Autonomous execution of approved code changes.
+- Direct deploy/rollback controls.
+- Email, banking, RevenueCat, App Store Connect, or Google Play admin actions.
+
+Those belong to later Hands/Appliances phases and must keep explicit approval gates.

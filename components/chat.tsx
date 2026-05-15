@@ -26,16 +26,17 @@ const ACCEPTED_TYPES = [
 
 const TOOL_LABELS: Record<string, string> = {
   get_current_datetime: "Checking date & time",
-  calculate: "Calculating",
-  create_task_plan: "Planning task",
-  web_search: "Searching the web",
-  analyze_github_repo: "Analyzing GitHub repo",
+  calculate: "Calculating only because this is math",
+  create_task_plan: "Building a work plan",
+  web_search: "Checking current information",
+  analyze_github_repo: "Inspecting GitHub repository",
   get_jarvis_capability_snapshot: "Checking Jarvis capabilities",
   get_jarvis_self_audit_snapshot: "Running Jarvis self-audit",
-  execute_code: "Running code",
-  listRepositoryTree: "Scanning repository file structure...",
-  readRepositoryFile: "Reading code file content...",
-  commitChangesDirectly: "Writing code changes directly to repository...",
+  execute_code: "Running a safe code check",
+  listRepositoryTree: "Inspecting the repository structure",
+  readRepositoryFile: "Reading the exact source file",
+  create_repo_action_proposal: "Creating a Repo Control proposal",
+  commitChangesDirectly: "Writing approved code changes",
 };
 
 function getToolLabel(name: string) {

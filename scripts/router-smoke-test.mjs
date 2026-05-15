@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+const source = fs.readFileSync('lib/orchestration.ts', 'utf8');
+const route = fs.readFileSync('app/api/chat/route.ts', 'utf8');
+const checks = [
+  ['self-audit pattern exists', /SELF_AUDIT_PATTERN/.test(source)],
+  ['no corrupted backspace word-boundary characters', !source.includes('\u0008') && !source.includes('=\b')],
+  ['calculator requires explicit math/numeric expression', /EXPLICIT_CALC_PATTERN/.test(source) && /NUMERIC_EXPRESSION_PATTERN/.test(source)],
+  ['repo inspection exported', /export function needsRepositoryInspection/.test(source)],
+  ['agent work loop injected', /Agent Core Work Loop/.test(fs.readFileSync('lib/agent-work-loop.ts', 'utf8')) && /agentWorkLoopSection/.test(route)],
+  ['chat can create repo proposals', /create_repo_action_proposal/.test(route)],
+];
+const failed = checks.filter(([, ok]) => !ok);
+for (const [name, ok] of checks) console.log(`${ok ? '✅' : '❌'} ${name}`);
+if (failed.length) process.exit(1);
