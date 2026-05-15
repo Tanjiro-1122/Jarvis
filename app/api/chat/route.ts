@@ -323,7 +323,16 @@ function getForcedToolChoice(
   input: string,
   codeExecutionAvailable: boolean
 ):
-  | { type: "tool"; toolName: "execute_code" | "calculate" | "get_current_datetime" | "analyze_github_repo" }
+  | {
+      type: "tool";
+      toolName:
+        | "execute_code"
+        | "calculate"
+        | "get_current_datetime"
+        | "analyze_github_repo"
+        | "get_jarvis_capability_snapshot"
+        | "get_jarvis_self_audit_snapshot";
+    }
   | null {
   if (isCodeExecutionIntent(input, codeExecutionAvailable)) {
     return { type: "tool", toolName: "execute_code" };
@@ -1213,6 +1222,16 @@ ${supabaseMemorySection}` : ""}
 
 ## Planner / Executor
 - Intent: ${plannerOutput.intent}
+- Reasoning route: ${plannerOutput.reasoningRoute}
+- Route rules:
+  - answer_only: answer directly unless a tool is clearly needed.
+  - truth_check: use Capability Truth before making capability claims.
+  - self_audit: use Self-Audit before reporting readiness/system health.
+  - inspect_first: inspect with the relevant tool before concluding.
+  - plan_first: show a practical plan before action.
+  - proposal_required: provide Findings → Plan and route repo/app changes through Repo Control approval gates before execution.
+  - approval_required: do not execute sensitive/external actions until Javier explicitly approves the exact action.
+  - not_connected: state the capability is not connected yet and propose the safest setup path.
 - Plan:
 ${plannerOutput.steps
   .map((step, index) => `${index + 1}. ${step.label} — ${step.detail}`)
@@ -1233,6 +1252,7 @@ ${plannerOutput.steps
 ### Capability-accurate responses
 - Never prove Jarvis platform capabilities by creating fake/simulated JavaScript objects that say systems are operational. That is not a real diagnostic.
 - For Jarvis self-audits, use real available endpoints/tools where available, or clearly label the result as "not verified" with the exact missing check. Be brutally honest.
+- Follow the Reasoning Router route. If it says approval_required or proposal_required, do not skip straight to execution even if Javier gave broad phase approval; external/sensitive actions still need exact-action approval.
 - If a user asks what works, separate: verified, partially wired, requires environment variables/schema, and not connected yet.
 - Do not call sandboxed code a test of Supabase, Vercel, GitHub, memory, files, or runner health unless the code actually contacted the relevant system.
 - Do NOT use generic disclaimers such as "I can't access the internet" or "I have no access to external systems" as blanket statements

@@ -23,6 +23,11 @@ export interface AgentCapabilities {
 // ─── Intent detection ─────────────────────────────────────────────────────────
 
 export type DetectedIntent =
+  | "self_audit"
+  | "capability_truth"
+  | "approval_required"
+  | "not_connected"
+  | "repo_proposal"
   | "code_execution"
   | "web_search"
   | "github_analysis"
@@ -30,6 +35,16 @@ export type DetectedIntent =
   | "calculate"
   | "plan"
   | "general";
+
+export type ReasoningRoute =
+  | "answer_only"
+  | "truth_check"
+  | "self_audit"
+  | "inspect_first"
+  | "plan_first"
+  | "proposal_required"
+  | "approval_required"
+  | "not_connected";
 
 /**
  * Detect the primary tool intent from the latest user message.
@@ -45,6 +60,27 @@ export function detectToolIntent(
   if (!input.trim()) return "general";
 
   const lower = input.toLowerCase();
+
+  // ── Brain/control-plane routing ─────────────────────────────────────────
+  if (/(self[- ]?audit|audit yourself|system health|are you ready|check your brain|what should we patch next|brain check|readiness report)/.test(lower)) {
+    return "self_audit";
+  }
+
+  if (/(what can you actually do|what can you do|what is connected|what's connected|what is missing|what's missing|setup missing|capabilities|capability|how far can we take you|are you fully set up)/.test(lower)) {
+    return "capability_truth";
+  }
+
+  if (/(send email|email customer|reply to customer|grant free|grant credit|free month|refund|charge|bank transfer|bill payment|move money|delete production|deploy|push to production|open pr|pull request|commit|merge)/.test(lower)) {
+    return "approval_required";
+  }
+
+  if (/(bank|banking|bank of america|gmail|outlook|customer inbox|revenuecat admin|app store connect|google play console|play console|send customer email)/.test(lower)) {
+    return "not_connected";
+  }
+
+  if (/(fix|patch|change|modify|update|implement|add|remove|refactor)/.test(lower) && /(repo|repository|code|jarvis|unfiltr|swh|family|app)/.test(lower)) {
+    return "repo_proposal";
+  }
 
   // ── Code execution ──────────────────────────────────────────────────────
   if (capabilities.codeExecution.available) {
@@ -140,7 +176,10 @@ export interface PlannerOutput {
     | "calculate"
     | "get_current_datetime"
     | "analyze_github_repo"
+    | "get_jarvis_capability_snapshot"
+    | "get_jarvis_self_audit_snapshot"
     | null;
+  reasoningRoute: ReasoningRoute;
   routingHint: string;
   steps: PlannerStep[];
 }
@@ -174,10 +213,61 @@ export function buildPlannerOutput(options: {
     },
   ];
 
+  if (intent === "self_audit") {
+    return {
+      intent,
+      forcedToolName: "get_jarvis_self_audit_snapshot",
+      reasoningRoute: "self_audit",
+      routingHint:
+        "- Reasoning Router: run Self-Audit Mode before answering. Report verified, partial, missing, not connected, and next patch.",
+      steps: baseSteps,
+    };
+  }
+  if (intent === "capability_truth") {
+    return {
+      intent,
+      forcedToolName: "get_jarvis_capability_snapshot",
+      reasoningRoute: "truth_check",
+      routingHint:
+        "- Reasoning Router: use the Capability Truth Layer before answering. Separate verified/configured/partial/missing/not connected/approval-required.",
+      steps: baseSteps,
+    };
+  }
+  if (intent === "approval_required") {
+    return {
+      intent,
+      forcedToolName: "get_jarvis_capability_snapshot",
+      reasoningRoute: "approval_required",
+      routingHint:
+        "- Reasoning Router: sensitive action detected. Gather facts only, explain findings/plan, and ask Javier for explicit approval before execution. Do not perform the action yet.",
+      steps: baseSteps,
+    };
+  }
+  if (intent === "not_connected") {
+    return {
+      intent,
+      forcedToolName: "get_jarvis_capability_snapshot",
+      reasoningRoute: "not_connected",
+      routingHint:
+        "- Reasoning Router: requested capability may not be connected. Check truth layer, state the limitation plainly, and suggest the safest next setup path.",
+      steps: baseSteps,
+    };
+  }
+  if (intent === "repo_proposal") {
+    return {
+      intent,
+      forcedToolName: null,
+      reasoningRoute: "proposal_required",
+      routingHint:
+        "- Reasoning Router: repo/app change requested. Provide Findings → Plan first and route actual changes through Repo Control approval gates before execution.",
+      steps: baseSteps,
+    };
+  }
   if (intent === "code_execution") {
     return {
       intent,
       forcedToolName: "execute_code",
+      reasoningRoute: "inspect_first",
       routingHint:
         "- Planner decision: this is execution-heavy; prioritize execute_code with observable outputs.",
       steps: baseSteps,
@@ -187,6 +277,7 @@ export function buildPlannerOutput(options: {
     return {
       intent,
       forcedToolName: "calculate",
+      reasoningRoute: "answer_only",
       routingHint:
         "- Planner decision: this is numeric; use calculate for deterministic math.",
       steps: baseSteps,
@@ -196,6 +287,7 @@ export function buildPlannerOutput(options: {
     return {
       intent,
       forcedToolName: "get_current_datetime",
+      reasoningRoute: "answer_only",
       routingHint:
         "- Planner decision: this is time-sensitive; use get_current_datetime.",
       steps: baseSteps,
@@ -205,6 +297,7 @@ export function buildPlannerOutput(options: {
     return {
       intent,
       forcedToolName: "analyze_github_repo",
+      reasoningRoute: "inspect_first",
       routingHint:
         "- Planner decision: this targets a GitHub repo; use analyze_github_repo first.",
       steps: baseSteps,
@@ -214,6 +307,7 @@ export function buildPlannerOutput(options: {
     return {
       intent,
       forcedToolName: null,
+      reasoningRoute: "inspect_first",
       routingHint:
         "- Planner decision: this likely needs fresh information; prefer web_search early.",
       steps: baseSteps,
@@ -223,6 +317,7 @@ export function buildPlannerOutput(options: {
   return {
     intent,
     forcedToolName: null,
+    reasoningRoute: intent === "plan" ? "plan_first" : "answer_only",
     routingHint:
       "- Planner decision: no hard route override; pick tools opportunistically based on concrete sub-steps.",
     steps: baseSteps,
