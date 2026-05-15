@@ -2132,7 +2132,10 @@ export function Chat() {
                 key={workspace.id}
                 type="button"
                 className={`workspace-list-item ${isActive ? "workspace-list-item--active" : ""}`}
-                onClick={() => handleWorkspaceSelect(workspace.id)}
+                onClick={() => {
+                  handleWorkspaceSelect(workspace.id);
+                  setShowWorkspaceDrawer(false);
+                }}
               >
                 <div className="workspace-list-item-header">
                   <span>{workspace.name}</span>
@@ -2612,8 +2615,24 @@ export function Chat() {
       </section>
 
       {showInfoSidebar && (
-        <aside className="context-sidebar">
+        <button
+          type="button"
+          className="drawer-backdrop tools-drawer-backdrop"
+          aria-label="Close tools drawer"
+          onClick={() => setShowInfoSidebar(false)}
+        />
+      )}
+
+      {showInfoSidebar && (
+        <aside className="context-sidebar context-sidebar--open" aria-label="Jarvis tools and controls">
           <div className="context-panel">
+            <div className="glass-drawer-titlebar">
+              <div>
+                <span>Jarvis tools</span>
+                <small>{selectedProject.label}</small>
+              </div>
+              <button type="button" onClick={() => setShowInfoSidebar(false)} aria-label="Close tools">Close</button>
+            </div>
             <div className="context-panel-section project-switchboard-section">
               <div className="context-panel-header">
                 <div>
