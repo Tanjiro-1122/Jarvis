@@ -949,6 +949,79 @@ function getAgentTools({
       },
     }),
 
+
+    run_repo_action_ladder: tool({
+      description:
+        "Run the safe Repo Control ladder for an existing proposal. It runs inspection, diff drafting/generation, sandbox check, and temporary workspace check in sequence. It stops before PR if approval/build gates are not satisfied; it never merges or deploys.",
+      parameters: z.object({
+        proposalId: z.string().min(1).max(120),
+        includePrStep: z.boolean().optional().default(false),
+      }),
+      execute: async ({ proposalId, includePrStep = false }) => {
+        const steps: Array<{ action: string; ok: boolean; error?: string; summary?: string }> = [];
+        const runStage = async (action: "inspect_repo" | "draft_diff" | "generate_diff" | "sandbox_check" | "temp_workspace_check" | "open_pr" | "track_pr") => {
+          const result =
+            action === "inspect_repo"
+              ? await inspectRepoActionFiles({ id: proposalId })
+              : action === "draft_diff"
+                ? await draftRepoActionDiff({ id: proposalId })
+                : action === "generate_diff"
+                  ? await generateRepoActionProposedDiff({ id: proposalId })
+                  : action === "sandbox_check"
+                    ? await sandboxCheckRepoActionDiff({ id: proposalId })
+                    : action === "temp_workspace_check"
+                      ? await runTemporaryWorkspaceBuildCheck({ id: proposalId })
+                      : action === "open_pr"
+                        ? await openRepoActionPullRequest({ id: proposalId })
+                        : await trackRepoActionPullRequest({ id: proposalId });
+          const ok = Boolean(result.ok);
+          steps.push({
+            action,
+            ok,
+            error: ok ? undefined : result.error || "Stage failed.",
+            summary: ok ? "completed" : "stopped here",
+          });
+          return result;
+        };
+
+        for (const action of ["inspect_repo", "draft_diff", "generate_diff", "sandbox_check", "temp_workspace_check"] as const) {
+          const result = await runStage(action);
+          if (!result.ok) {
+            return {
+              success: false,
+              proposalId,
+              stoppedAt: action,
+              steps,
+              error: result.error || "Repo Control ladder stopped.",
+              message: "The ladder stopped safely. No merge or deployment happened.",
+            };
+          }
+        }
+
+        if (includePrStep) {
+          const prResult = await runStage("open_pr");
+          if (!prResult.ok) {
+            return {
+              success: false,
+              proposalId,
+              stoppedAt: "open_pr",
+              steps,
+              error: prResult.error || "PR gate blocked this action.",
+              message: "The ladder reached the PR gate and stopped safely. No merge or deployment happened.",
+            };
+          }
+          await runStage("track_pr");
+        }
+
+        return {
+          success: true,
+          proposalId,
+          steps,
+          message: "Repo Control ladder completed the available safe stages. No merge or deployment happened.",
+        };
+      },
+    }),
+
     execute_code: tool({
       description:
         "Run a short, self-contained JavaScript or TypeScript snippet inside Jarvis's sandbox. Use for small coding checks, evaluating generated code, quick data transforms, algorithm verification, and generating downloadable text artifacts (CSV, JSON, SVG, HTML, Markdown). The snippet must be self-contained, must not use imports or external modules, and should use `return` to surface a final value. Console output and artifacts are returned to the chat UI.",

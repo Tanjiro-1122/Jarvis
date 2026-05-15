@@ -10,6 +10,7 @@ Agent Core v1 is the first quality upgrade after the Brain phase.
 - Agent Work Loop prompt section: understand → inspect → plan → propose → verify → respond.
 - Chat-accessible Repo Control proposal tool that creates approval records without changing code.
 - Chat-accessible `run_repo_action_stage` tool for inspect/diff/check/PR stages using existing backend gates.
+- Chat-accessible `run_repo_action_ladder` tool for the safe inspect → diff → sandbox → temp-build sequence.
 - Cleaner progress labels for repo inspection and proposal creation.
 - Static router smoke test via `npm run test:router`.
 
