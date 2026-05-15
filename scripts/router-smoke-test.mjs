@@ -8,6 +8,7 @@ const checks = [
   ['repo inspection exported', /export function needsRepositoryInspection/.test(source)],
   ['agent work loop injected', /Agent Core Work Loop/.test(fs.readFileSync('lib/agent-work-loop.ts', 'utf8')) && /agentWorkLoopSection/.test(route)],
   ['chat can create repo proposals', /create_repo_action_proposal/.test(route)],
+  ['chat can run repo action stages', /run_repo_action_stage/.test(route)],
 ];
 const failed = checks.filter(([, ok]) => !ok);
 for (const [name, ok] of checks) console.log(`${ok ? '✅' : '❌'} ${name}`);

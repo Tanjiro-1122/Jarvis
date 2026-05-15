@@ -42,7 +42,16 @@ import {
 } from "@/lib/project-registry";
 import { getCapabilityTruthSnapshot } from "@/lib/capability-truth";
 import { getSelfAuditSnapshot } from "@/lib/self-audit";
-import { createRepoActionProposal } from "@/lib/repo-actions";
+import {
+  createRepoActionProposal,
+  draftRepoActionDiff,
+  generateRepoActionProposedDiff,
+  inspectRepoActionFiles,
+  openRepoActionPullRequest,
+  runTemporaryWorkspaceBuildCheck,
+  sandboxCheckRepoActionDiff,
+  trackRepoActionPullRequest,
+} from "@/lib/repo-actions";
 
 export const maxDuration = 60; // Multi-step agent execution requires up to 60 s; needs Vercel Pro or higher.
 const MAX_SESSION_ID_LENGTH = 128;
@@ -893,6 +902,53 @@ function getAgentTools({
         };
       },
     }),
+
+    run_repo_action_stage: tool({
+      description:
+        "Run one safe Repo Control stage for an existing proposal: inspect files, draft a diff, generate a proposed diff, run sandbox safety checks, run a temporary workspace build check, open a PR, or track a PR. This tool uses the existing Repo Control backend gates and does not merge or deploy.",
+      parameters: z.object({
+        proposalId: z.string().min(1).max(120),
+        action: z.enum([
+          "inspect_repo",
+          "draft_diff",
+          "generate_diff",
+          "sandbox_check",
+          "temp_workspace_check",
+          "open_pr",
+          "track_pr",
+        ]),
+      }),
+      execute: async ({ proposalId, action }) => {
+        const run = async () => {
+          if (action === "inspect_repo") return inspectRepoActionFiles({ id: proposalId });
+          if (action === "draft_diff") return draftRepoActionDiff({ id: proposalId });
+          if (action === "generate_diff") return generateRepoActionProposedDiff({ id: proposalId });
+          if (action === "sandbox_check") return sandboxCheckRepoActionDiff({ id: proposalId });
+          if (action === "temp_workspace_check") return runTemporaryWorkspaceBuildCheck({ id: proposalId });
+          if (action === "open_pr") return openRepoActionPullRequest({ id: proposalId });
+          return trackRepoActionPullRequest({ id: proposalId });
+        };
+
+        const result = await run();
+        if (!result.ok) {
+          return {
+            success: false,
+            action,
+            proposalId,
+            error: result.error || "Repo Control stage failed.",
+            message: "No merge or deployment happened.",
+          };
+        }
+        return {
+          success: true,
+          action,
+          proposalId,
+          result,
+          message: "Repo Control stage completed. No merge or deployment happened.",
+        };
+      },
+    }),
+
     execute_code: tool({
       description:
         "Run a short, self-contained JavaScript or TypeScript snippet inside Jarvis's sandbox. Use for small coding checks, evaluating generated code, quick data transforms, algorithm verification, and generating downloadable text artifacts (CSV, JSON, SVG, HTML, Markdown). The snippet must be self-contained, must not use imports or external modules, and should use `return` to surface a final value. Console output and artifacts are returned to the chat UI.",

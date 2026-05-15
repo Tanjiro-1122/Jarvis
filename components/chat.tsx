@@ -36,6 +36,7 @@ const TOOL_LABELS: Record<string, string> = {
   listRepositoryTree: "Inspecting the repository structure",
   readRepositoryFile: "Reading the exact source file",
   create_repo_action_proposal: "Creating a Repo Control proposal",
+  run_repo_action_stage: "Running a Repo Control stage",
   commitChangesDirectly: "Writing approved code changes",
 };
 
