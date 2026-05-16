@@ -47,6 +47,45 @@ function getToolLabel(name: string) {
   return TOOL_LABELS[name] ?? `Running ${name.replace(/_/g, " ")}`;
 }
 
+const REPO_STAGE_LABELS: Record<string, string> = {
+  inspect_repo: "Inspecting repo files",
+  draft_diff: "Drafting proposed diff",
+  generate_diff: "Generating safe diff",
+  sandbox_check: "Running sandbox safety check",
+  temp_workspace_check: "Running temp workspace build",
+  open_pr: "Opening pull request",
+  track_pr: "Tracking PR checks",
+  execute_approved: "Running approved executor",
+};
+
+const DEPLOYMENT_ACTION_LABELS: Record<string, string> = {
+  inspect: "Inspecting deployments",
+  prepare_redeploy: "Preparing redeploy approval",
+  prepare_rollback: "Preparing rollback approval",
+};
+
+function humanizeToolName(name: string) {
+  return name
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getToolDisplayLabel(name: string, args?: Record<string, unknown>, result?: RepoControlToolResult) {
+  if (name === "run_repo_action_stage") {
+    const stage = typeof args?.action === "string" ? args.action : result?.action;
+    return stage ? REPO_STAGE_LABELS[stage] ?? `Running ${humanizeToolName(stage)}` : TOOL_LABELS[name];
+  }
+  if (name === "run_repo_action_ladder") return "Running safe Repo Control ladder";
+  if (name === "run_approved_repo_action") return "Running approved PR executor";
+  if (name === "deployment_control") {
+    const action = typeof args?.action === "string" ? args.action : result?.action;
+    return action ? DEPLOYMENT_ACTION_LABELS[action] ?? `Checking deployment ${humanizeToolName(action)}` : TOOL_LABELS[name];
+  }
+  return TOOL_LABELS[name] ?? `Running ${humanizeToolName(name)}`;
+}
+
 const EXECUTION_FAILURE_LABELS: Record<string, string> = {
   disabled: "Execution disabled in deployment",
   empty_snippet: "No executable snippet provided",
@@ -155,7 +194,7 @@ function RepoControlCard({
 }) {
   const isPending = state === "partial-call" || state === "call";
   const failed = !isPending && result?.success === false;
-  const title = getToolLabel(name);
+  const title = getToolDisplayLabel(name, args, result);
   const proposalId = result?.proposalId || (typeof args.proposalId === "string" ? args.proposalId : undefined);
   const stage = result?.action || (typeof args.action === "string" ? args.action : undefined);
   const steps = Array.isArray(result?.steps) ? result.steps.slice(0, 7) : [];
@@ -971,7 +1010,7 @@ function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
     <div className={`tool-card ${isPending ? "tool-card--pending" : ""}`}>
       <div className="tool-card-header">
         <span className="tool-card-icon">{isPending ? "⚙️" : "✅"}</span>
-        <span className="tool-card-title">{getToolLabel(invocation.toolName)}</span>
+        <span className="tool-card-title">{getToolDisplayLabel(invocation.toolName, invocation.args as Record<string, unknown>)}</span>
         {isPending && <span className="tool-spinner" />}
       </div>
     </div>

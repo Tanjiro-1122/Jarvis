@@ -15,6 +15,7 @@ const checks = [
   ['owner summary discipline exists', /Final response discipline/.test(route) && /never dump raw tool JSON/.test(route)],
   ['controlled executor exists', /runApprovedRepoActionExecutor/.test(fs.readFileSync('lib/repo-actions.ts', 'utf8')) && /run_approved_repo_action/.test(route)],
   ['deployment control exists', fs.existsSync('lib/deployment-control.ts') && /deployment_control/.test(route) && /prepareDeploymentControlAction/.test(fs.readFileSync('lib/deployment-control.ts', 'utf8'))],
+  ['specific tool labels exist', /getToolDisplayLabel/.test(fs.readFileSync('components/chat.tsx', 'utf8')) && /Preparing rollback approval/.test(fs.readFileSync('components/chat.tsx', 'utf8'))],
 ];
 const failed = checks.filter(([, ok]) => !ok);
 for (const [name, ok] of checks) console.log(`${ok ? '✅' : '❌'} ${name}`);

@@ -4,6 +4,8 @@ Agent Core v1 is the first quality upgrade after the Brain phase.
 
 ## Included
 
+- Specific tool-status labels for Repo Control/deployment stages so mobile progress cards do not repeat generic capability labels.
+
 - Deployment control foundation: inspect Vercel deployments and prepare redeploy/rollback approval notes without mutating production.
 
 - Controlled executor for approved proposals: runs existing safety gates and can open/track a PR, but does not merge or deploy.
