@@ -531,6 +531,86 @@ export async function getWorkspaceTask(taskId: string) {
   return mapTask(taskResponse.data as WorkspaceTaskRow, stepsByTaskId);
 }
 
+
+export interface WorkspaceTaskCheckpointInput {
+  label: string;
+  summary: string;
+  completedStep?: string | null;
+  nextStep?: string | null;
+  blocker?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface WorkspaceTaskCheckpoint extends WorkspaceTaskCheckpointInput {
+  id: string;
+  createdAt: string;
+}
+
+function normalizeCheckpointText(value: unknown, maxChars = 1200) {
+  const text = String(value ?? "")
+    .replace(/[ -]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > maxChars ? `${text.slice(0, maxChars)}…` : text;
+}
+
+function getCheckpointList(task: WorkspaceTaskSummary): WorkspaceTaskCheckpoint[] {
+  const existing = task.runnerMetadata?.checkpoints;
+  return Array.isArray(existing) ? existing.slice(-25) as WorkspaceTaskCheckpoint[] : [];
+}
+
+export async function addWorkspaceTaskCheckpoint(taskId: string, input: WorkspaceTaskCheckpointInput) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+
+  const task = await getWorkspaceTask(taskId);
+  if (!task) return null;
+
+  const now = new Date().toISOString();
+  const checkpoint: WorkspaceTaskCheckpoint = {
+    id: crypto.randomUUID(),
+    createdAt: now,
+    label: normalizeCheckpointText(input.label, 180) || "Checkpoint",
+    summary: normalizeCheckpointText(input.summary, 1600),
+    completedStep: input.completedStep ? normalizeCheckpointText(input.completedStep, 300) : null,
+    nextStep: input.nextStep ? normalizeCheckpointText(input.nextStep, 300) : null,
+    blocker: input.blocker ? normalizeCheckpointText(input.blocker, 500) : null,
+    metadata: input.metadata ?? null,
+  };
+
+  if (!checkpoint.summary) return null;
+
+  const metadata = {
+    ...(task.runnerMetadata ?? {}),
+    checkpoints: [...getCheckpointList(task), checkpoint].slice(-25),
+    latest_checkpoint: checkpoint,
+  };
+
+  const logs = [
+    ...(task.runnerLogs ?? []).slice(-25),
+    { timestamp: now, level: checkpoint.blocker ? "warn" : "info", message: `Checkpoint saved: ${checkpoint.label}` },
+  ];
+
+  await supabase
+    .from("workspace_tasks")
+    .update({
+      runner_metadata: metadata,
+      runner_logs: logs,
+      runner_status: checkpoint.blocker ? "blocked_checkpoint" : "checkpoint_saved",
+      updated_at: now,
+    })
+    .eq("id", taskId);
+
+  return getWorkspaceTask(taskId);
+}
+
+export async function getLatestWorkspaceTaskCheckpoint(taskId: string) {
+  const task = await getWorkspaceTask(taskId);
+  if (!task) return null;
+  const checkpoints = getCheckpointList(task);
+  return checkpoints.length ? checkpoints[checkpoints.length - 1] : null;
+}
+
 export async function claimQueuedWorkspaceTask(taskId: string) {
   const supabase = getSupabaseClient();
   if (!supabase) return null;

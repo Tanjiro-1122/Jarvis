@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { logActionEvent } from "@/lib/action-events";
 import {
+  addWorkspaceTaskCheckpoint,
   claimQueuedWorkspaceTask,
   completeWorkspaceTask,
   createQueuedWorkspaceJob,
   failWorkspaceTask,
+  getLatestWorkspaceTaskCheckpoint,
   getWorkspaceTask,
   getWorkspaceTasks,
   updateWorkspaceTaskStep,
@@ -23,6 +25,23 @@ const CreateJobSchema = z.object({
 const RunJobSchema = z.object({
   taskId: z.string().uuid(),
   sessionId: z.string().max(160).optional().nullable(),
+});
+
+const CheckpointJobSchema = z.object({
+  action: z.literal("checkpoint"),
+  taskId: z.string().uuid(),
+  sessionId: z.string().max(160).optional().nullable(),
+  label: z.string().min(1).max(180),
+  summary: z.string().min(1).max(1600),
+  completedStep: z.string().max(300).optional().nullable(),
+  nextStep: z.string().max(300).optional().nullable(),
+  blocker: z.string().max(500).optional().nullable(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+});
+
+const LatestCheckpointSchema = z.object({
+  action: z.literal("latest_checkpoint"),
+  taskId: z.string().uuid(),
 });
 
 function summarizeJob(input: string, intent: string) {
@@ -113,9 +132,45 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  const checkpointParsed = CheckpointJobSchema.safeParse(body);
+  if (checkpointParsed.success) {
+    const task = await addWorkspaceTaskCheckpoint(checkpointParsed.data.taskId, {
+      label: checkpointParsed.data.label,
+      summary: checkpointParsed.data.summary,
+      completedStep: checkpointParsed.data.completedStep ?? null,
+      nextStep: checkpointParsed.data.nextStep ?? null,
+      blocker: checkpointParsed.data.blocker ?? null,
+      metadata: checkpointParsed.data.metadata ?? null,
+    });
+    if (!task) return NextResponse.json({ error: "Unable to save checkpoint." }, { status: 404 });
+
+    await logActionEvent({
+      eventType: checkpointParsed.data.blocker ? "job.checkpoint_blocked" : "job.checkpoint_saved",
+      summary: `Saved checkpoint: ${checkpointParsed.data.label}`,
+      status: checkpointParsed.data.blocker ? "blocked" : "info",
+      approvalStage: "action",
+      riskLevel: "low",
+      projectKey: "jarvis",
+      sessionId: checkpointParsed.data.sessionId ?? null,
+      workspaceId: task.workspaceId,
+      conversationId: task.conversationId,
+      metadata: { taskId: task.id, nextStep: checkpointParsed.data.nextStep ?? null, blocker: checkpointParsed.data.blocker ?? null },
+    });
+
+    return NextResponse.json({ job: task, checkpoint: task.runnerMetadata?.latest_checkpoint ?? null });
+  }
+
+  const latestCheckpointParsed = LatestCheckpointSchema.safeParse(body);
+  if (latestCheckpointParsed.success) {
+    const checkpoint = await getLatestWorkspaceTaskCheckpoint(latestCheckpointParsed.data.taskId);
+    const task = await getWorkspaceTask(latestCheckpointParsed.data.taskId);
+    if (!task) return NextResponse.json({ error: "Job not found." }, { status: 404 });
+    return NextResponse.json({ job: task, checkpoint });
+  }
+
   const parsed = RunJobSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid run request.", details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: "Invalid run/checkpoint request.", details: parsed.error.flatten() }, { status: 400 });
   }
 
   const task = await claimQueuedWorkspaceTask(parsed.data.taskId);

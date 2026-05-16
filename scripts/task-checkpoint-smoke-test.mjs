@@ -1,0 +1,20 @@
+import fs from 'node:fs';
+
+const tasks = fs.readFileSync('lib/tasks.ts', 'utf8');
+const jobs = fs.readFileSync('app/api/jobs/route.ts', 'utf8');
+const roadmap = fs.readFileSync('docs/jarvis-endgame-roadmap.md', 'utf8');
+
+const checks = [
+  ['checkpoint input type exists', /WorkspaceTaskCheckpointInput/.test(tasks)],
+  ['checkpoint writer exists', /addWorkspaceTaskCheckpoint/.test(tasks)],
+  ['latest checkpoint reader exists', /getLatestWorkspaceTaskCheckpoint/.test(tasks)],
+  ['uses runner metadata for checkpoints', /runner_metadata/.test(tasks) && /latest_checkpoint/.test(tasks)],
+  ['checkpoint route action exists', /CheckpointJobSchema/.test(jobs) && /action: z\.literal\("checkpoint"\)/.test(jobs)],
+  ['latest checkpoint route action exists', /LatestCheckpointSchema/.test(jobs) && /latest_checkpoint/.test(jobs)],
+  ['checkpoint action events logged', /job\.checkpoint_saved/.test(jobs) && /job\.checkpoint_blocked/.test(jobs)],
+  ['persistent operator phase documented', /Persistent Operator/.test(roadmap) && /resumable work plans and checkpoints/.test(roadmap)],
+];
+
+const failed = checks.filter(([, ok]) => !ok);
+for (const [name, ok] of checks) console.log(`${ok ? '✅' : '❌'} ${name}`);
+if (failed.length) process.exit(1);
