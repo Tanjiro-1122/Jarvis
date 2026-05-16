@@ -1389,6 +1389,20 @@ export async function openRepoActionPullRequest(options: { id: string }) {
     steps.push({ step: "git status --short", ...status });
     if (!status.output.trim()) throw new Error("Patch produced no local changes.");
 
+    const add = await runCommand("git", ["add", "--all"], repoDir, 30000);
+    steps.push({ step: "git add --all", ...add });
+    if (!add.ok) throw new Error("Git add failed.");
+
+    const commitMessage = `Jarvis: ${proposal.title}`.slice(0, 240);
+    const commit = await runCommand("git", ["commit", "-m", commitMessage], repoDir, 60000);
+    steps.push({ step: "git commit", ...commit });
+    if (!commit.ok) throw new Error("Git commit failed.");
+
+    const commitShaResult = await runCommand("git", ["rev-parse", "HEAD"], repoDir, 30000);
+    steps.push({ step: "git rev-parse HEAD", ...commitShaResult });
+    if (!commitShaResult.ok || !commitShaResult.output.trim()) throw new Error("Unable to read commit SHA.");
+    const commitSha = commitShaResult.output.trim().split(/\s+/)[0] || "";
+
     const push = await runCommand("git", ["push", "origin", `HEAD:${branch}`], repoDir, 120000);
     steps.push({ step: "git push branch", ...push });
     if (!push.ok) throw new Error("Branch push failed.");
@@ -1409,6 +1423,7 @@ export async function openRepoActionPullRequest(options: { id: string }) {
       `Repo: ${slug}`,
       `Base: ${defaultBranch}`,
       `Branch: ${branch}`,
+      `Commit: ${commitSha}`,
       `PR: ${pr.data.html_url}`,
       `Opened: ${now}`,
       `Cleanup: pending`,
@@ -1444,6 +1459,7 @@ export async function openRepoActionPullRequest(options: { id: string }) {
           pr_number: pr.data.number,
           pr_branch: branch,
           pr_base: defaultBranch,
+          pr_commit_sha: commitSha,
           pr_cleanup_ok: finalCleanupOk,
           pr_steps: steps.map((step) => ({ step: step.step, ok: step.ok, code: step.code, durationMs: step.durationMs, output: redactedCommandOutput(step.output, 2500) })),
           safety: "branch_and_pr_only_no_merge_no_deploy",
@@ -1470,10 +1486,10 @@ export async function openRepoActionPullRequest(options: { id: string }) {
       sessionId: updated.session_id,
       workspaceId: updated.workspace_id,
       conversationId: updated.conversation_id,
-      metadata: { proposalId: updated.id, repo: slug, branch, prUrl: pr.data.html_url, prNumber: pr.data.number, cleanupOk: finalCleanupOk },
+      metadata: { proposalId: updated.id, repo: slug, branch, commitSha, prUrl: pr.data.html_url, prNumber: pr.data.number, cleanupOk: finalCleanupOk },
     });
 
-    return { ok: true, proposal: updated, prUrl: pr.data.html_url, branch };
+    return { ok: true, proposal: updated, prUrl: pr.data.html_url, branch, commitSha };
   } catch (error) {
     try {
       await rm(tempRoot, { recursive: true, force: true });

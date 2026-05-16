@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 const source = fs.readFileSync('lib/orchestration.ts', 'utf8');
 const route = fs.readFileSync('app/api/chat/route.ts', 'utf8');
+const repoActions = fs.readFileSync('lib/repo-actions.ts', 'utf8');
 
 const orchestration = fs.readFileSync('lib/orchestration.ts', 'utf8');
 const explicitRepoProposalPattern = /const EXPLICIT_REPO_PROPOSAL_PATTERN/.test(orchestration);
