@@ -5,6 +5,7 @@ const jobs = fs.readFileSync('app/api/jobs/route.ts', 'utf8');
 const cliRunnerJobs = fs.readFileSync('lib/cli-runner-jobs.ts', 'utf8');
 const roadmap = fs.readFileSync('docs/jarvis-endgame-roadmap.md', 'utf8');
 const externalRunnerSpec = fs.readFileSync('docs/external-runner-spec.md', 'utf8');
+const trustedRunner = fs.readFileSync('scripts/trusted-runner.mjs', 'utf8');
 const chatUi = fs.readFileSync('components/chat.tsx', 'utf8');
 const css = fs.readFileSync('app/globals.css', 'utf8');
 const chatRoute = fs.readFileSync('app/api/chat/route.ts', 'utf8');
@@ -22,6 +23,7 @@ const checks = [
   ['chat auto-checkpoint exists', /addWorkspaceTaskCheckpoint/.test(chatRoute) && /Chat task completed/.test(chatRoute) && /Chat task interrupted/.test(chatRoute)],
   ['cli runner queued jobs exist', /queueCliRunnerJob/.test(cliRunnerJobs) && /queued_only_no_local_execution/.test(cliRunnerJobs) && /intent: \"cli_runner\"/.test(cliRunnerJobs)],
   ['external runner spec exists', /External Runner Spec v1/.test(externalRunnerSpec) && /JARVIS_RUNNER_TOKEN/.test(externalRunnerSpec) && /APPROVE JARVIS ROLLBACK/.test(externalRunnerSpec) && /must not execute/.test(externalRunnerSpec)],
+  ['trusted runner script exists', /trusted runner starting/.test(trustedRunner) && /JARVIS_RUNNER_DRY_RUN/.test(trustedRunner) && /ALLOW_DRY_RUN_CLAIM/.test(trustedRunner) && /spawn\(command, args/.test(trustedRunner)],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);

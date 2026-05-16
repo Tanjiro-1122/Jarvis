@@ -32,6 +32,33 @@ VERCEL_TOKEN=<token used by documented Vercel CLI commands>
 RUNNER_ID=trusted-runner-1
 ```
 
+
+## Reference runner script
+
+A conservative reference implementation lives at `scripts/trusted-runner.mjs`.
+
+Default behavior is dry-run:
+
+```bash
+npm run runner:trusted -- --once
+```
+
+In dry-run mode, the script refuses to claim jobs unless explicitly allowed:
+
+```bash
+JARVIS_RUNNER_ALLOW_DRY_RUN_CLAIM=true npm run runner:trusted -- --once
+```
+
+Actual command execution requires all of the following:
+
+```txt
+JARVIS_RUNNER_DRY_RUN=false
+JARVIS_RUNNER_EXECUTION_MODE=execute
+VERCEL_TOKEN=<token>
+```
+
+The script still validates task intent, execution mode, job kind, exact deployment approval phrase, and Vercel command shape before executing anything.
+
 ## Claim loop
 
 The external runner polls:
