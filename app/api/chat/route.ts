@@ -49,6 +49,7 @@ import {
   generateRepoActionProposedDiff,
   inspectRepoActionFiles,
   openRepoActionPullRequest,
+  prepareRepoDeploymentHandoff,
   runApprovedRepoActionExecutor,
   runRepoControlFlow,
   runTemporaryWorkspaceBuildCheck,
@@ -1178,6 +1179,23 @@ function getAgentTools({
     }),
 
 
+    prepare_repo_deployment_handoff: tool({
+      description:
+        "Prepare a deployment approval handoff package for a ready Repo Control PR. It reads existing PR readiness metadata and returns the PR URL, branch, readiness summary, required approval phrase, and next safe action. It never merges, deploys, redeploys, rolls back, queues runner jobs, or mutates production.",
+      parameters: z.object({
+        proposalId: z.string().min(1).max(120),
+      }),
+      execute: async ({ proposalId }) => {
+        const result = await prepareRepoDeploymentHandoff({ proposalId });
+        return {
+          success: result.ready,
+          ...result,
+          message: result.message || "Deployment handoff prepared in metadata-only mode. No deployment happened.",
+        };
+      },
+    }),
+
+
     deployment_control: tool({
       description:
         "Inspect Vercel deployment status or prepare a redeploy/rollback action for Javier approval. This tool never redeploys, rolls back, merges, or mutates production.",
@@ -1670,7 +1688,7 @@ ${plannerOutput.steps
 - For questions like "audit yourself", "are you ready", "check your brain", "system health", or "what should we patch next", call get_jarvis_self_audit_snapshot before answering.
 - Treat banking, customer emails, subscription credits/free months, production app fixes, deploys, and repo changes as sensitive actions.
 - For sensitive actions, follow this sequence: gather facts safely, explain findings, draft the proposed action, ask Javier for approval, then execute only after approval.
-- Never claim email, banking, RevenueCat granting, or external customer-service actions are connected unless the capability snapshot or a real tool confirms it. RevenueCat subscriber lookup is read-only only through lookup_revenuecat_subscriber; never imply grants, refunds, transfers, deletes, or entitlement mutations are available. App Store Connect lookup is read-only only through lookup_app_store_connect_status; never imply release, submit, metadata edit, build expiry, or review mutation actions are available. Google Play lookup is read-only only through lookup_google_play_status; never imply release-track edits, publishing, rollout, halt, product edits, or review replies are available. Google Play release tracks are blocked unless Javier approves a separate edit-session reader design. One-command app health snapshots are read-only only through get_app_health_snapshot and must not imply repair actions were executed. One-command Repo Control flow through run_repo_control_flow must stop at approval gates and never imply merge, deploy, rollback, or production mutation.
+- Never claim email, banking, RevenueCat granting, or external customer-service actions are connected unless the capability snapshot or a real tool confirms it. RevenueCat subscriber lookup is read-only only through lookup_revenuecat_subscriber; never imply grants, refunds, transfers, deletes, or entitlement mutations are available. App Store Connect lookup is read-only only through lookup_app_store_connect_status; never imply release, submit, metadata edit, build expiry, or review mutation actions are available. Google Play lookup is read-only only through lookup_google_play_status; never imply release-track edits, publishing, rollout, halt, product edits, or review replies are available. Google Play release tracks are blocked unless Javier approves a separate edit-session reader design. One-command app health snapshots are read-only only through get_app_health_snapshot and must not imply repair actions were executed. One-command Repo Control flow through run_repo_control_flow must stop at approval gates and never imply merge, deploy, rollback, or production mutation. Deployment handoff through prepare_repo_deployment_handoff is metadata-only and never queues or executes deployment.
 - Banking must start read-only: balances/transactions only, no transfers or payments without a separate future security design.
 - Customer communications must be drafted first. Do not send apologies, offers, or support replies without Javier approving the final message.
 

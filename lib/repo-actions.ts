@@ -1825,6 +1825,151 @@ export async function runApprovedRepoActionExecutor(options: { id: string; openP
 }
 
 
+
+export interface RepoDeploymentPrepResult {
+  ok: boolean;
+  proposalId: string;
+  ready: boolean;
+  prUrl?: string;
+  prBranch?: string;
+  readinessSummary?: string;
+  readinessReasons?: string[];
+  vercel?: unknown;
+  requiredApprovalPhrase: string;
+  nextAction: string;
+  safety: string;
+  message: string;
+  error?: string;
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+export async function prepareRepoDeploymentHandoff(options: { id: string } | { proposalId: string }): Promise<RepoDeploymentPrepResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return {
+      ok: false,
+      proposalId: "id" in options ? options.id : options.proposalId,
+      ready: false,
+      requiredApprovalPhrase: "APPROVE JARVIS REDEPLOY",
+      nextAction: "Configure Supabase so Jarvis can read proposal metadata.",
+      safety: "metadata_only_no_deploy",
+      message: "Deployment handoff could not be prepared because Supabase is not configured.",
+      error: "Supabase is not configured.",
+    };
+  }
+
+  const proposalId = cleanText("id" in options ? options.id : options.proposalId, 120);
+  if (!proposalId) {
+    return {
+      ok: false,
+      proposalId: "",
+      ready: false,
+      requiredApprovalPhrase: "APPROVE JARVIS REDEPLOY",
+      nextAction: "Provide a valid Repo Control proposal ID.",
+      safety: "metadata_only_no_deploy",
+      message: "Deployment handoff could not start because proposal ID was missing.",
+      error: "Proposal id is required.",
+    };
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .select("id, title, summary, repo, project_key, risk_level, status, draft_metadata, session_id, workspace_id, conversation_id, updated_at")
+    .eq("id", proposalId)
+    .single();
+
+  if (fetchError || !existing) {
+    logError("repoActions.prepareRepoDeploymentHandoff.fetch", fetchError);
+    return {
+      ok: false,
+      proposalId,
+      ready: false,
+      requiredApprovalPhrase: "APPROVE JARVIS REDEPLOY",
+      nextAction: "Confirm the proposal ID and rerun deployment handoff prep.",
+      safety: "metadata_only_no_deploy",
+      message: "Deployment handoff could not find the proposal.",
+      error: fetchError?.message ?? "Proposal not found.",
+    };
+  }
+
+  const proposal = existing as Pick<RepoActionProposalRow, "id" | "title" | "summary" | "repo" | "project_key" | "risk_level" | "status" | "draft_metadata" | "session_id" | "workspace_id" | "conversation_id" | "updated_at">;
+  const metadata = metadataRecord(proposal.draft_metadata);
+  const prReady = metadata.pr_overall_ready === true;
+  const prUrl = typeof metadata.pr_url === "string" ? metadata.pr_url : undefined;
+  const prBranch = typeof metadata.pr_branch === "string" ? metadata.pr_branch : undefined;
+  const readinessSummary = typeof metadata.pr_readiness_summary === "string" ? metadata.pr_readiness_summary : undefined;
+  const readinessReasons = Array.isArray(metadata.pr_readiness_reasons) ? metadata.pr_readiness_reasons.filter((item): item is string => typeof item === "string") : [];
+  const vercel = metadata.vercel;
+
+  const ready = Boolean(prReady && prUrl);
+  const nextAction = ready
+    ? "Review the ready PR and preview. If Javier wants production movement, use the separate deployment approval flow with the required phrase."
+    : "Wait for PR checks/preview readiness or rerun PR tracking before preparing deployment approval.";
+  const message = ready
+    ? "Deployment handoff is prepared for review only. No redeploy, rollback, merge, or production mutation happened."
+    : "Deployment handoff is blocked until the PR is ready. No redeploy, rollback, merge, or production mutation happened.";
+
+  const updatedMetadata = {
+    ...metadata,
+    deployment_prep: {
+      prepared_at: new Date().toISOString(),
+      ready,
+      pr_url: prUrl,
+      pr_branch: prBranch,
+      readiness_summary: readinessSummary,
+      readiness_reasons: readinessReasons,
+      required_approval_phrase: "APPROVE JARVIS REDEPLOY",
+      safety: "metadata_only_no_deploy",
+    },
+  };
+
+  await supabase
+    .from("jarvis_repo_action_proposals")
+    .update({ draft_metadata: updatedMetadata, updated_at: new Date().toISOString() })
+    .eq("id", proposalId);
+
+  await logActionEvent({
+    eventType: ready ? "repo_action.deployment_handoff_prepared" : "repo_action.deployment_handoff_blocked",
+    summary: ready ? `Deployment handoff prepared: ${proposal.title}` : `Deployment handoff blocked: ${proposal.title}`,
+    status: ready ? "proposed" : "blocked",
+    approvalStage: ready ? "approval" : "findings",
+    riskLevel: proposal.risk_level,
+    projectKey: proposal.project_key,
+    sessionId: proposal.session_id,
+    workspaceId: proposal.workspace_id,
+    conversationId: proposal.conversation_id,
+    metadata: {
+      proposalId,
+      repo: proposal.repo,
+      prUrl,
+      prBranch,
+      ready,
+      readinessSummary,
+      readinessReasons,
+      safety: "metadata_only_no_deploy",
+      requiredApprovalPhrase: "APPROVE JARVIS REDEPLOY",
+    },
+  });
+
+  return {
+    ok: ready,
+    proposalId,
+    ready,
+    prUrl,
+    prBranch,
+    readinessSummary,
+    readinessReasons,
+    vercel,
+    requiredApprovalPhrase: "APPROVE JARVIS REDEPLOY",
+    nextAction,
+    safety: "metadata_only_no_deploy",
+    message,
+  };
+}
+
 export interface RepoControlFlowStep {
   action: string;
   ok: boolean;
@@ -1842,6 +1987,7 @@ export interface RepoControlFlowResult {
   nextAction: string;
   prUrl?: string;
   branch?: string;
+  deploymentPrep?: RepoDeploymentPrepResult;
   safety: string;
   message: string;
 }
@@ -1957,6 +2103,15 @@ export async function runRepoControlFlow(options: { id: string; openPr?: boolean
     metadata: { proposalId, prUrl, branch, safety: "pr_only_no_merge_no_deploy" },
   });
 
+  const deploymentPrep = await prepareRepoDeploymentHandoff({ id: proposalId });
+  steps.push({
+    action: "deployment_handoff",
+    ok: deploymentPrep.ready,
+    status: deploymentPrep.ready ? "completed" : "blocked",
+    error: deploymentPrep.ready ? undefined : deploymentPrep.message,
+    summary: deploymentPrep.ready ? "deployment approval package prepared" : "deployment handoff not ready",
+  });
+
   return {
     ok: true,
     proposalId,
@@ -1964,7 +2119,8 @@ export async function runRepoControlFlow(options: { id: string; openPr?: boolean
     steps,
     prUrl,
     branch,
-    nextAction: "Review the PR/checks. Deployment remains a separate explicit approval step.",
+    deploymentPrep,
+    nextAction: deploymentPrep.nextAction,
     safety: "pr_only_no_merge_no_deploy",
     message: executorMessage || "Repo Control flow completed through PR readiness. No merge or deployment happened.",
   };

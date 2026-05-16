@@ -969,3 +969,32 @@ Safety boundaries:
 - It never merges pull requests.
 - It never deploys, redeploys, rolls back, or mutates production.
 - Deployment remains a separate explicit approval flow.
+
+
+## Deployment handoff after PR readiness
+
+Jarvis can prepare a deployment handoff package after Repo Control PR tracking reports the PR is ready.
+
+Use:
+
+- Chat tool: `prepare_repo_deployment_handoff`
+- Repo action API: `prepare_deployment_handoff`
+- Automatic inclusion after successful `run_repo_control_flow`
+
+The handoff includes:
+
+- Proposal ID
+- PR URL
+- PR branch
+- readiness summary/reasons
+- Vercel preview metadata when available
+- required deployment approval phrase: `APPROVE JARVIS REDEPLOY`
+- next safe action
+
+Safety boundaries:
+
+- Metadata-only package.
+- No merge.
+- No deploy, redeploy, rollback, or production mutation.
+- No runner job is queued by this handoff.
+- Actual deployment remains a separate explicit deployment-control approval flow.

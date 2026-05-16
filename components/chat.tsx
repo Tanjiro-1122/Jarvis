@@ -173,6 +173,62 @@ function CalculateCard({
 }
 
 
+type RepoDeploymentHandoffResult = {
+  success?: boolean;
+  ok?: boolean;
+  proposalId?: string;
+  ready?: boolean;
+  prUrl?: string;
+  prBranch?: string;
+  readinessSummary?: string;
+  readinessReasons?: string[];
+  requiredApprovalPhrase?: string;
+  nextAction?: string;
+  safety?: string;
+  message?: string;
+  error?: string;
+};
+
+function DeploymentHandoffCard({
+  state,
+  result,
+}: {
+  state: ToolInvocation["state"];
+  result?: RepoDeploymentHandoffResult;
+}) {
+  const isPending = state === "partial-call" || state === "call";
+  const ready = Boolean(result?.ready ?? result?.success ?? result?.ok);
+  const failed = !isPending && !ready;
+
+  return (
+    <div className={`tool-card tool-card--deployment-handoff ${isPending ? "tool-card--pending" : ""} ${failed ? "tool-card--failed" : ""}`}>
+      <div className="tool-card-header">
+        <span className="tool-card-icon">{isPending ? "📦" : ready ? "🚦" : "🛑"}</span>
+        <span className="tool-card-title">Deployment handoff</span>
+        {isPending && <span className="tool-spinner" />}
+      </div>
+      <div className="tool-card-body tool-card-body--stacked">
+        <span className="repo-control-meta">Proposal: {result?.proposalId ?? "pending"}</span>
+        <span className={ready ? "repo-control-status repo-control-status--safe" : "repo-control-status repo-control-status--warning"}>
+          {isPending ? "Preparing metadata-only handoff" : ready ? "Ready for explicit deployment approval" : "Blocked until PR is ready"}
+        </span>
+        {result?.message && <p className="build-intel-copy">{result.message}</p>}
+        {result?.readinessSummary && <div className="deployment-handoff-line"><strong>Readiness:</strong> {result.readinessSummary}</div>}
+        {result?.prBranch && <div className="deployment-handoff-line"><strong>Branch:</strong> {result.prBranch}</div>}
+        {result?.prUrl && <a className="repo-control-link" href={result.prUrl} target="_blank" rel="noreferrer">Open ready PR</a>}
+        {result?.requiredApprovalPhrase && <div className="deployment-handoff-phrase"><strong>Required phrase:</strong> {result.requiredApprovalPhrase}</div>}
+        {(result?.readinessReasons?.length ?? 0) > 0 && (
+          <div className="deployment-handoff-reasons">
+            {result!.readinessReasons!.slice(0, 5).map((reason, index) => <span key={`${reason}-${index}`}>{reason}</span>)}
+          </div>
+        )}
+        {result?.nextAction && <div className="deployment-handoff-line"><strong>Next:</strong> {result.nextAction}</div>}
+        <div className="deployment-handoff-boundary">Metadata-only · no merge, no deploy, no rollback, no runner job.</div>
+      </div>
+    </div>
+  );
+}
+
 type RepoControlFlowResult = {
   success?: boolean;
   ok?: boolean;
@@ -183,6 +239,7 @@ type RepoControlFlowResult = {
   nextAction?: string;
   prUrl?: string;
   branch?: string;
+  deploymentPrep?: RepoDeploymentHandoffResult;
   safety?: string;
   message?: string;
   error?: string;
@@ -223,6 +280,11 @@ function RepoControlFlowCard({
           </div>
         )}
         {result?.prUrl && <a className="repo-control-link" href={result.prUrl} target="_blank" rel="noreferrer">Open PR</a>}
+        {result?.deploymentPrep && (
+          <div className={result.deploymentPrep.ready ? "deployment-handoff-phrase" : "deployment-handoff-line"}>
+            <strong>Deployment handoff:</strong> {result.deploymentPrep.ready ? `Ready · ${result.deploymentPrep.requiredApprovalPhrase ?? "approval required"}` : result.deploymentPrep.message ?? "not ready"}
+          </div>
+        )}
         {result?.nextAction && <div className="repo-flow-next"><strong>Next:</strong> {result.nextAction}</div>}
         <div className="repo-flow-boundary">Safety: {result?.safety ?? "no merge, no deploy, no production mutation"}</div>
       </div>
@@ -1372,6 +1434,15 @@ function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
               })
             : undefined
         }
+      />
+    );
+  }
+
+  if (invocation.toolName === "prepare_repo_deployment_handoff") {
+    return (
+      <DeploymentHandoffCard
+        state={invocation.state}
+        result={invocation.state === "result" ? (invocation.result as RepoDeploymentHandoffResult) : undefined}
       />
     );
   }

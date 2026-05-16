@@ -1742,3 +1742,38 @@ button:disabled {
 .repo-flow-boundary {
   color: #6b5f86;
 }
+
+
+.tool-card--deployment-handoff {
+  border-color: rgba(245, 158, 11, 0.26);
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.86), rgba(255, 255, 255, 0.94));
+}
+
+.deployment-handoff-line,
+.deployment-handoff-phrase,
+.deployment-handoff-reasons span,
+.deployment-handoff-boundary {
+  display: block;
+  color: #5f4b24;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.deployment-handoff-phrase {
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  border-radius: 12px;
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 251, 235, 0.78);
+  color: #92400e;
+}
+
+.deployment-handoff-reasons {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.deployment-handoff-boundary {
+  border-top: 1px solid rgba(245, 158, 11, 0.18);
+  padding-top: 0.45rem;
+  color: #7c5e25;
+}
