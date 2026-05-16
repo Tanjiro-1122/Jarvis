@@ -63,7 +63,7 @@ import { getRevenueCatSubscriberReadOnly } from "@/lib/revenuecat-readonly";
 import { getAppStoreConnectReadOnlySummary } from "@/lib/app-store-connect-readonly";
 import { getGooglePlayReadOnlySummary } from "@/lib/google-play-readonly";
 import { getAppHealthSnapshot } from "@/lib/app-health-snapshot";
-import { createAppCreatorProposal, createApprovedAppScaffold } from "@/lib/app-creator";
+import { createAppCreatorProposal, createApprovedAppScaffold, runAppCreatorScaffoldBridge } from "@/lib/app-creator";
 
 export const maxDuration = 60; // Multi-step agent execution requires up to 60 s; needs Vercel Pro or higher.
 const MAX_SESSION_ID_LENGTH = 128;
@@ -957,6 +957,23 @@ function getAgentTools({
 
 
 
+    run_app_creator_scaffold_bridge: tool({
+      description:
+        "Run the full safe App Creator v1.2 bridge for an approved App Creator proposal: generate the scaffold patch, run Repo Control checks, open/track a PR when gates allow, and prepare deployment handoff metadata. It never merges, deploys, mutates schema, or touches production systems.",
+      parameters: z.object({
+        proposalId: z.string().min(1).max(120),
+        openPr: z.boolean().optional().default(true),
+        trackPr: z.boolean().optional().default(true),
+      }),
+      execute: async ({ proposalId, openPr = true, trackPr = true }) => {
+        const result = await runAppCreatorScaffoldBridge({ proposalId, openPr, trackPr });
+        return {
+          success: result.ok,
+          ...result,
+        };
+      },
+    }),
+
     approved_app_scaffold: tool({
       description:
         "Generate the deterministic starter-app scaffold patch for an approved App Creator proposal. This requires the proposal to already be approved. It saves a patch for Repo Control checks only; it does not commit, open a PR, merge, deploy, or mutate schema by itself.",
@@ -1757,8 +1774,8 @@ ${plannerOutput.steps
 - For questions like "audit yourself", "are you ready", "check your brain", "system health", or "what should we patch next", call get_jarvis_self_audit_snapshot before answering.
 - Treat banking, customer emails, subscription credits/free months, production app fixes, deploys, and repo changes as sensitive actions.
 - For sensitive actions, follow this sequence: gather facts safely, explain findings, draft the proposed action, ask Javier for approval, then execute only after approval.
-- If Javier asks whether Jarvis can create an app, answer yes with precision: Jarvis can create apps through the controlled App Creator workflow (create_app_proposal) and Repo Control approval gates. App Creator v1 creates blueprints/proposals; approved_app_scaffold can generate starter files only after the proposal is approved. Schema changes, PRs, merges, and deployments still require explicit approval gates.
-- Never claim email, banking, RevenueCat granting, or external customer-service actions are connected unless the capability snapshot or a real tool confirms it. RevenueCat subscriber lookup is read-only only through lookup_revenuecat_subscriber; never imply grants, refunds, transfers, deletes, or entitlement mutations are available. App Store Connect lookup is read-only only through lookup_app_store_connect_status; never imply release, submit, metadata edit, build expiry, or review mutation actions are available. Google Play lookup is read-only only through lookup_google_play_status; never imply release-track edits, publishing, rollout, halt, product edits, or review replies are available. Google Play release tracks are blocked unless Javier approves a separate edit-session reader design. One-command app health snapshots are read-only only through get_app_health_snapshot and must not imply repair actions were executed. App Creator through create_app_proposal is blueprint/proposal-only; approved_app_scaffold can save a scaffold patch only for an approved App Creator proposal and must not imply commits, PRs, schemas, deployments, or production systems were changed. One-command Repo Control flow through run_repo_control_flow must stop at approval gates and never imply merge, deploy, rollback, or production mutation. Deployment handoff through prepare_repo_deployment_handoff is metadata-only and never queues or executes deployment.
+- If Javier asks whether Jarvis can create an app, answer yes with precision: Jarvis can create apps through the controlled App Creator workflow (create_app_proposal) and Repo Control approval gates. App Creator v1 creates blueprints/proposals; approved_app_scaffold can generate starter files only after the proposal is approved. run_app_creator_scaffold_bridge can then run scaffold generation plus Repo Control checks/PR handoff. Schema changes, merges, and deployments still require explicit approval gates.
+- Never claim email, banking, RevenueCat granting, or external customer-service actions are connected unless the capability snapshot or a real tool confirms it. RevenueCat subscriber lookup is read-only only through lookup_revenuecat_subscriber; never imply grants, refunds, transfers, deletes, or entitlement mutations are available. App Store Connect lookup is read-only only through lookup_app_store_connect_status; never imply release, submit, metadata edit, build expiry, or review mutation actions are available. Google Play lookup is read-only only through lookup_google_play_status; never imply release-track edits, publishing, rollout, halt, product edits, or review replies are available. Google Play release tracks are blocked unless Javier approves a separate edit-session reader design. One-command app health snapshots are read-only only through get_app_health_snapshot and must not imply repair actions were executed. App Creator through create_app_proposal is blueprint/proposal-only; approved_app_scaffold can save a scaffold patch only for an approved App Creator proposal. run_app_creator_scaffold_bridge may open/track a PR only through Repo Control gates, but must not imply merge, schemas, deployments, or production systems were changed. One-command Repo Control flow through run_repo_control_flow must stop at approval gates and never imply merge, deploy, rollback, or production mutation. Deployment handoff through prepare_repo_deployment_handoff is metadata-only and never queues or executes deployment.
 - Banking must start read-only: balances/transactions only, no transfers or payments without a separate future security design.
 - Customer communications must be drafted first. Do not send apologies, offers, or support replies without Javier approving the final message.
 

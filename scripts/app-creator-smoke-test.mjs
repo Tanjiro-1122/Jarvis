@@ -15,17 +15,22 @@ function assert(condition, message) {
 assert(/buildAppCreatorPlan/.test(lib), "App Creator must build a deterministic app plan.");
 assert(/createAppCreatorProposal/.test(lib), "App Creator must create a controlled proposal.");
 assert(/createApprovedAppScaffold/.test(lib), "App Creator must expose approved scaffold generation.");
+assert(/runAppCreatorScaffoldBridge/.test(lib), "App Creator must expose scaffold execution bridge.");
 assert(/buildAppScaffoldPatch/.test(lib), "App Creator must build deterministic scaffold patches.");
 assert(/blueprint_only_no_files_changed_no_schema_no_deploy/.test(lib), "App Creator must enforce blueprint-only v1 safety.");
 assert(/approved_scaffold_patch_no_merge_no_deploy/.test(lib), "App Creator scaffold must not merge or deploy.");
+assert(/scaffold_bridge_no_merge_no_deploy_no_schema_mutation/.test(lib), "App Creator bridge must not merge, deploy, or mutate schema.");
+assert(/runRepoControlFlow/.test(lib), "App Creator bridge must route through Repo Control flow.");
 assert(/Proposal must be approved before scaffolding/.test(lib), "App Creator scaffold must require proposal approval.");
 assert(/createRepoActionProposal/.test(lib), "App Creator must route through Repo Control.");
 assert(/create_app_proposal/.test(route), "Chat must expose create_app_proposal tool.");
 assert(/approved_app_scaffold/.test(route), "Chat must expose approved_app_scaffold tool.");
+assert(/run_app_creator_scaffold_bridge/.test(route), "Chat must expose run_app_creator_scaffold_bridge tool.");
 assert(/does not edit files, create schemas, deploy, or open a PR/.test(route), "Tool description must state no direct mutation.");
 assert(/Jarvis can create apps through the controlled App Creator workflow/.test(route), "System prompt must answer app creation accurately.");
 assert(/AppCreatorCard/.test(ui), "Chat UI must render App Creator card.");
 assert(/changedFiles/.test(ui), "App Creator card must surface generated scaffold files.");
+assert(/repoFlow/.test(ui) && /prUrl/.test(ui), "App Creator card must surface bridge Repo Control and PR details.");
 assert(/tool-card--app-creator/.test(ui) && /tool-card--app-creator/.test(css), "App Creator UI styling must exist.");
 
 console.log("✅ App Creator smoke test passed.");

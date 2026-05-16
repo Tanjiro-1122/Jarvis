@@ -1,4 +1,4 @@
-import { createRepoActionProposal, isRepoActionProposalId, repoActionProposalIdError, type RepoActionFileTarget, type RepoActionProposalRow, type RepoActionRisk } from "@/lib/repo-actions";
+import { createRepoActionProposal, isRepoActionProposalId, repoActionProposalIdError, runRepoControlFlow, type RepoControlFlowResult, type RepoActionFileTarget, type RepoActionProposalRow, type RepoActionRisk } from "@/lib/repo-actions";
 import { getSupabaseClient } from "@/lib/supabase";
 import { logError } from "@/lib/errors";
 import { logActionEvent } from "@/lib/action-events";
@@ -52,6 +52,20 @@ export interface AppScaffoldResult {
   appPlan?: AppCreatorPlan;
   proposal?: RepoActionProposalRow;
   changedFiles?: string[];
+  error?: string;
+  message: string;
+  safety: string;
+  nextAction: string;
+}
+
+export interface AppScaffoldBridgeResult {
+  ok: boolean;
+  proposalId: string;
+  scaffold?: AppScaffoldResult;
+  repoFlow?: RepoControlFlowResult;
+  appPlan?: AppCreatorPlan;
+  changedFiles?: string[];
+  prUrl?: string;
   error?: string;
   message: string;
   safety: string;
@@ -605,5 +619,89 @@ export async function createApprovedAppScaffold(options: { proposalId: string })
     message: "App Creator v1.1 generated the approved starter-app scaffold patch. No merge, deployment, schema mutation, or production change happened.",
     safety: "approved_scaffold_patch_no_merge_no_deploy",
     nextAction: "Run run_repo_control_flow on this proposal to sandbox-check, temp-build-check, and open/track a PR if gates pass.",
+  };
+}
+
+
+export async function runAppCreatorScaffoldBridge(options: {
+  proposalId: string;
+  openPr?: boolean;
+  trackPr?: boolean;
+}): Promise<AppScaffoldBridgeResult> {
+  const proposalId = cleanText(options.proposalId, 120);
+  if (!isRepoActionProposalId(proposalId)) {
+    return {
+      ok: false,
+      proposalId,
+      error: repoActionProposalIdError(proposalId),
+      message: "App Creator bridge did not start because the proposal ID was invalid.",
+      safety: "no_action_taken",
+      nextAction: "Use the App Creator proposal UUID from the proposal card.",
+    };
+  }
+
+  const scaffold = await createApprovedAppScaffold({ proposalId });
+  if (!scaffold.ok) {
+    return {
+      ok: false,
+      proposalId,
+      scaffold,
+      appPlan: scaffold.appPlan,
+      changedFiles: scaffold.changedFiles,
+      error: scaffold.error || "Approved scaffold generation stopped safely.",
+      message: "App Creator bridge stopped before Repo Control because scaffold generation did not pass its gate.",
+      safety: scaffold.safety || "approval_required_no_files_changed_no_schema_no_deploy",
+      nextAction: scaffold.nextAction,
+    };
+  }
+
+  const repoFlow = await runRepoControlFlow({
+    proposalId,
+    openPr: options.openPr ?? true,
+    trackPr: options.trackPr ?? true,
+  });
+
+  const flowOk = Boolean(repoFlow.ok);
+  const repoFlowError = "error" in repoFlow && typeof repoFlow.error === "string" ? repoFlow.error : undefined;
+  const prUrl = typeof repoFlow.prUrl === "string" ? repoFlow.prUrl : undefined;
+  const deploymentReady = Boolean(repoFlow.deploymentPrep?.ready);
+  const ok = flowOk || Boolean(prUrl) || deploymentReady;
+
+  await logActionEvent({
+    eventType: "app_creator.scaffold_bridge",
+    summary: `App Creator scaffold bridge: ${scaffold.appPlan?.appName || proposalId}`,
+    status: ok ? "executed" : "blocked",
+    approvalStage: ok ? "complete" : "approval",
+    riskLevel: scaffold.proposal?.risk_level || "medium",
+    projectKey: scaffold.proposal?.project_key || "jarvis",
+    sessionId: scaffold.proposal?.session_id,
+    workspaceId: scaffold.proposal?.workspace_id,
+    conversationId: scaffold.proposal?.conversation_id,
+    metadata: {
+      proposalId,
+      changedFiles: scaffold.changedFiles || [],
+      repoFlowStoppedAt: repoFlow.stoppedAt,
+      prUrl,
+      deploymentReady,
+      safety: "scaffold_bridge_no_merge_no_deploy_no_schema_mutation",
+    },
+  });
+
+  return {
+    ok,
+    proposalId,
+    scaffold,
+    repoFlow,
+    appPlan: scaffold.appPlan,
+    changedFiles: scaffold.changedFiles,
+    prUrl,
+    error: ok ? undefined : repoFlowError || "Repo Control flow stopped safely.",
+    message: ok
+      ? "App Creator v1.2 completed the safe scaffold bridge through Repo Control. No merge, deployment, schema mutation, or production change happened."
+      : "App Creator v1.2 generated the scaffold patch, then stopped safely during Repo Control checks.",
+    safety: "scaffold_bridge_no_merge_no_deploy_no_schema_mutation",
+    nextAction: deploymentReady
+      ? "Review the PR and deployment handoff. Deployment still requires the exact deployment approval phrase."
+      : repoFlow.nextAction || "Review the Repo Control result and resolve any blocked check before proceeding.",
   };
 }
