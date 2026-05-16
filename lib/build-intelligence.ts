@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { logError } from "@/lib/errors";
 import { getExternalServicesHealth, summarizeExternalServicesHealth, type ExternalServiceCheck } from "@/lib/external-services-health";
 import { logActionEvent } from "@/lib/action-events";
+import { getProjectByKey } from "@/lib/project-registry";
 
 const DEFAULT_REPO = "Tanjiro-1122/Jarvis";
 
@@ -209,7 +210,8 @@ export async function getVercelIntelligence(): Promise<VercelIntelligence> {
 }
 
 export async function getBuildIntelligenceSnapshot(options: { projectKey?: string | null; repo?: string | null } = {}): Promise<BuildIntelligenceSnapshot> {
-  const [github, vercel] = await Promise.all([getGitHubIntelligence(options.repo), getVercelIntelligence()]);
+  const projectRepo = options.repo || getProjectByKey(options.projectKey)?.repo || null;
+  const [github, vercel] = await Promise.all([getGitHubIntelligence(projectRepo), getVercelIntelligence()]);
   const externalServices = getExternalServicesHealth();
   const snapshot = {
     generatedAt: new Date().toISOString(),
