@@ -237,3 +237,26 @@ The gate writes:
 ```
 
 v1.9 is gate-only. It validates that the artifact and verification are owner-only, authenticated, non-public, non-customer-facing, and inside `apps/<slug>`. It must not deploy, create a preview URL, run Vercel, merge, mutate schemas, write env vars, change payments, or launch to customers. A future hosting step must require the separate approval phrase `APPROVE OWNER PREVIEW HOSTING`.
+
+
+## Protected owner preview execution v1.10
+
+After the v1.9 owner-only preview gate exists and is clean, Jarvis may record protected preview execution with:
+
+```txt
+npm run execute-owner-preview -- --proposal-id=<uuid> --approval="APPROVE OWNER PREVIEW HOSTING"
+```
+
+The execution step reads:
+
+```txt
+.jarvis/private-preview-gates/<proposal-id>.json
+```
+
+The execution step writes:
+
+```txt
+.jarvis/private-preview-executions/<proposal-id>.json
+```
+
+v1.10 is execution-record only. It requires the exact approval phrase `APPROVE OWNER PREVIEW HOSTING`, validates the v1.9 gate, and records that the protected owner-preview step is approved. It must not run Vercel, deploy, create a public or protected URL, merge code, mutate schemas, write env vars, change payments, or launch to customers. Real provider-backed hosting remains blocked behind a later phrase: `APPROVE PROTECTED HOSTING PROVIDER`.

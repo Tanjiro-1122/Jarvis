@@ -16,7 +16,8 @@
     "test:app-creator": "node scripts/app-creator-smoke-test.mjs",
     "private-owner-deploy": "node scripts/private-owner-deploy.mjs",
     "verify-private-owner-access": "node scripts/verify-private-owner-access.mjs",
-    "prepare-owner-preview": "node scripts/prepare-owner-preview.mjs"
+    "prepare-owner-preview": "node scripts/prepare-owner-preview.mjs",
+    "execute-owner-preview": "node scripts/execute-owner-preview.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

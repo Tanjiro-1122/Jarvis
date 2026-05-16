@@ -8,6 +8,7 @@ const pkg = fs.readFileSync("package.json", "utf8");
 const privateExecutor = fs.readFileSync("scripts/private-owner-deploy.mjs", "utf8");
 const privateVerifier = fs.readFileSync("scripts/verify-private-owner-access.mjs", "utf8");
 const ownerPreviewGate = fs.readFileSync("scripts/prepare-owner-preview.mjs", "utf8");
+const ownerPreviewExecution = fs.readFileSync("scripts/execute-owner-preview.mjs", "utf8");
 
 function assert(condition, message) {
   if (!condition) {
