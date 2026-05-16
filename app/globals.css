@@ -1342,3 +1342,35 @@ button:disabled {
   color: #d97706;
   font-weight: 800;
 }
+
+
+.task-checkpoint-card {
+  margin-top: 0.7rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  display: grid;
+  gap: 0.35rem;
+  color: #33265f;
+}
+
+.task-checkpoint-title {
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: #4c1d95;
+}
+
+.task-checkpoint-card p,
+.task-checkpoint-card span {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.task-checkpoint-blocker {
+  color: #9f1239;
+  font-weight: 700;
+}

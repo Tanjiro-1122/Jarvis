@@ -3,6 +3,8 @@ import fs from 'node:fs';
 const tasks = fs.readFileSync('lib/tasks.ts', 'utf8');
 const jobs = fs.readFileSync('app/api/jobs/route.ts', 'utf8');
 const roadmap = fs.readFileSync('docs/jarvis-endgame-roadmap.md', 'utf8');
+const chatUi = fs.readFileSync('components/chat.tsx', 'utf8');
+const css = fs.readFileSync('app/globals.css', 'utf8');
 
 const checks = [
   ['checkpoint input type exists', /WorkspaceTaskCheckpointInput/.test(tasks)],
@@ -13,6 +15,7 @@ const checks = [
   ['latest checkpoint route action exists', /LatestCheckpointSchema/.test(jobs) && /latest_checkpoint/.test(jobs)],
   ['checkpoint action events logged', /job\.checkpoint_saved/.test(jobs) && /job\.checkpoint_blocked/.test(jobs)],
   ['persistent operator phase documented', /Persistent Operator/.test(roadmap) && /resumable work plans and checkpoints/.test(roadmap)],
+  ['checkpoint UI exists', /latest_checkpoint/.test(chatUi) && /Latest checkpoint/.test(chatUi) && /task-checkpoint-card/.test(css)],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);

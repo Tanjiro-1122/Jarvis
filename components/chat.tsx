@@ -430,6 +430,16 @@ interface WorkspaceTaskStepSummary {
   detail: string | null;
 }
 
+interface WorkspaceTaskCheckpoint {
+  id: string;
+  createdAt: string;
+  label: string;
+  summary: string;
+  completedStep?: string | null;
+  nextStep?: string | null;
+  blocker?: string | null;
+}
+
 interface WorkspaceTaskSummary {
   id: string;
   title: string;
@@ -445,6 +455,7 @@ interface WorkspaceTaskSummary {
   runnerHeartbeatAt?: string | null;
   runnerAttempts?: number;
   runnerLogs?: Array<{ timestamp: string; level: string; message: string }>;
+  runnerMetadata?: { latest_checkpoint?: WorkspaceTaskCheckpoint | null; checkpoints?: WorkspaceTaskCheckpoint[] } | null;
   steps: WorkspaceTaskStepSummary[];
 }
 
@@ -3259,6 +3270,23 @@ export function Chat() {
                           Latest runner log: {task.runnerLogs[task.runnerLogs.length - 1]?.message}
                         </p>
                       ) : null}
+                      {task.runnerMetadata?.latest_checkpoint && (
+                        <div className="task-checkpoint-card">
+                          <div className="task-checkpoint-title">
+                            Latest checkpoint: {task.runnerMetadata.latest_checkpoint.label}
+                          </div>
+                          <p>{task.runnerMetadata.latest_checkpoint.summary}</p>
+                          {task.runnerMetadata.latest_checkpoint.completedStep && (
+                            <span>Completed: {task.runnerMetadata.latest_checkpoint.completedStep}</span>
+                          )}
+                          {task.runnerMetadata.latest_checkpoint.nextStep && (
+                            <span>Next: {task.runnerMetadata.latest_checkpoint.nextStep}</span>
+                          )}
+                          {task.runnerMetadata.latest_checkpoint.blocker && (
+                            <span className="task-checkpoint-blocker">Blocked: {task.runnerMetadata.latest_checkpoint.blocker}</span>
+                          )}
+                        </div>
+                      )}
                       {task.steps.length > 0 && (
                         <p className="document-summary">
                           {task.steps
