@@ -24,6 +24,7 @@ const checks = [
   ['cli runner queued jobs exist', /queueCliRunnerJob/.test(cliRunnerJobs) && /queued_only_no_local_execution/.test(cliRunnerJobs) && /intent: \"cli_runner\"/.test(cliRunnerJobs)],
   ['external runner spec exists', /External Runner Spec v1/.test(externalRunnerSpec) && /JARVIS_RUNNER_TOKEN/.test(externalRunnerSpec) && /APPROVE JARVIS ROLLBACK/.test(externalRunnerSpec) && /must not execute/.test(externalRunnerSpec)],
   ['trusted runner script exists', /trusted runner starting/.test(trustedRunner) && /JARVIS_RUNNER_DRY_RUN/.test(trustedRunner) && /ALLOW_DRY_RUN_CLAIM/.test(trustedRunner) && /spawn\(command, args/.test(trustedRunner)],
+  ['runner dashboard visibility exists', /runner-status-card/.test(chatUi) && /runnerMetadata\?\.job_kind/.test(chatUi) && /runner-command-preview/.test(css)],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);

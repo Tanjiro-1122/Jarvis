@@ -510,7 +510,17 @@ interface WorkspaceTaskSummary {
   runnerHeartbeatAt?: string | null;
   runnerAttempts?: number;
   runnerLogs?: Array<{ timestamp: string; level: string; message: string }>;
-  runnerMetadata?: { latest_checkpoint?: WorkspaceTaskCheckpoint | null; checkpoints?: WorkspaceTaskCheckpoint[] } | null;
+  runnerMetadata?: {
+    latest_checkpoint?: WorkspaceTaskCheckpoint | null;
+    checkpoints?: WorkspaceTaskCheckpoint[];
+    job_kind?: string;
+    execution_mode?: string;
+    command?: string;
+    approval_text?: string | null;
+    risk_level?: string;
+    queued_at?: string;
+    reason?: string | null;
+  } | null;
   steps: WorkspaceTaskStepSummary[];
 }
 
@@ -700,6 +710,19 @@ function getTaskStatusLabel(status: WorkspaceTaskSummary["status"]) {
   if (status === "completed") return "Completed";
   if (status === "failed") return "Failed";
   return "Stopped";
+}
+
+function getRunnerJobLabel(kind?: string) {
+  if (kind === "vercel_redeploy") return "Vercel redeploy";
+  if (kind === "vercel_rollback") return "Vercel rollback";
+  if (kind === "repo_check") return "Repo check";
+  if (kind === "maintenance") return "Maintenance";
+  return kind ? kind.replace(/_/g, " ") : null;
+}
+
+function getCommandPreview(command?: string) {
+  if (!command) return null;
+  return command.length > 110 ? `${command.slice(0, 107)}…` : command;
 }
 
 function getSafeAttachmentImageUrl(
@@ -3318,6 +3341,38 @@ export function Chat() {
                         <div className="document-meta">
                           Runner: {task.runnerId ?? "unclaimed"} · {task.runnerStatus ?? task.status}
                           {task.runnerHeartbeatAt ? ` · heartbeat ${formatTimestamp(task.runnerHeartbeatAt)}` : ""}
+                        </div>
+                      )}
+                      {(task.intent === "cli_runner" || task.runnerMetadata?.job_kind || task.runnerMetadata?.command) && (
+                        <div className="runner-status-card">
+                          <div className="runner-status-header">
+                            <span>Runner job</span>
+                            {task.runnerMetadata?.risk_level && (
+                              <span className={`runner-risk-pill runner-risk-pill--${task.runnerMetadata.risk_level}`}>
+                                {task.runnerMetadata.risk_level} risk
+                              </span>
+                            )}
+                          </div>
+                          <div className="runner-status-grid">
+                            {getRunnerJobLabel(task.runnerMetadata?.job_kind) && (
+                              <span><strong>Kind</strong>{getRunnerJobLabel(task.runnerMetadata?.job_kind)}</span>
+                            )}
+                            {task.runnerMetadata?.execution_mode && (
+                              <span><strong>Mode</strong>{task.runnerMetadata.execution_mode.replace(/_/g, " ")}</span>
+                            )}
+                            {task.runnerMetadata?.approval_text && (
+                              <span><strong>Approval</strong>{task.runnerMetadata.approval_text}</span>
+                            )}
+                            {task.runnerAttempts !== undefined && task.runnerAttempts > 0 && (
+                              <span><strong>Attempts</strong>{task.runnerAttempts}</span>
+                            )}
+                          </div>
+                          {getCommandPreview(task.runnerMetadata?.command) && (
+                            <code className="runner-command-preview">{getCommandPreview(task.runnerMetadata?.command)}</code>
+                          )}
+                          {task.runnerMetadata?.reason && (
+                            <p className="runner-reason">Reason: {task.runnerMetadata.reason}</p>
+                          )}
                         </div>
                       )}
                       {task.runnerLogs?.length ? (
