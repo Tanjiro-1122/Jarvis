@@ -952,6 +952,28 @@ interface AgentMemorySummary {
   updated_at: string;
 }
 
+interface MemoryImportItemResult {
+  index: number;
+  title: string;
+  projectKey: string;
+  action: "would_import" | "imported" | "duplicate" | "blocked" | "failed";
+  reason?: string;
+  memoryId?: string;
+}
+
+interface MemoryImportResult {
+  ok: boolean;
+  mode: "dry_run" | "import";
+  source?: string;
+  total?: number;
+  imported?: number;
+  blocked?: number;
+  duplicates?: number;
+  ready?: number;
+  results?: MemoryImportItemResult[];
+  error?: string;
+}
+
 interface ActionEventSummary {
   id: string;
   event_type: string;
@@ -1629,6 +1651,11 @@ export function Chat() {
   const [memoryStatus, setMemoryStatus] = useState("");
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [memoryImportText, setMemoryImportText] = useState("");
+  const [memoryImportApproved, setMemoryImportApproved] = useState(false);
+  const [memoryImportBusy, setMemoryImportBusy] = useState(false);
+  const [memoryImportStatus, setMemoryImportStatus] = useState("");
+  const [memoryImportResult, setMemoryImportResult] = useState<MemoryImportResult | null>(null);
   const [actionEvents, setActionEvents] = useState<ActionEventSummary[]>([]);
   const [actionLogStatus, setActionLogStatus] = useState("");
   const [buildIntel, setBuildIntel] = useState<BuildIntelligenceSnapshot | null>(null);
@@ -2285,6 +2312,64 @@ export function Chat() {
       setMemoryStatus(error instanceof Error ? error.message : "Failed to archive memory.");
     } finally {
       setMemoryBusy(false);
+    }
+  }
+
+  function parseMemoryImportPayload() {
+    const trimmed = memoryImportText.trim();
+    if (!trimmed) throw new Error("Paste a curated memory JSON array or an object with an items array.");
+    const parsed = JSON.parse(trimmed) as unknown;
+    const items = Array.isArray(parsed)
+      ? parsed
+      : typeof parsed === "object" && parsed !== null && Array.isArray((parsed as { items?: unknown }).items)
+        ? (parsed as { items: unknown[] }).items
+        : null;
+    if (!items?.length) throw new Error("Memory import JSON must include at least one item.");
+    return items;
+  }
+
+  async function runMemoryImport(mode: "dry_run" | "import") {
+    if (memoryImportBusy) return;
+    if (mode === "import" && !memoryImportApproved) {
+      setMemoryImportStatus("Check the approval box before importing. Dry run first, then import only curated non-secret memories.");
+      return;
+    }
+
+    setMemoryImportBusy(true);
+    setMemoryImportStatus("");
+    try {
+      const items = parseMemoryImportPayload();
+      const response = await fetch("/api/memory/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          approved: mode === "import" ? memoryImportApproved : false,
+          source: "jarvis_ui_curated_import",
+          items,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as MemoryImportResult;
+      if (!response.ok && !payload.results?.length) throw new Error(payload.error ?? "Memory import failed.");
+      setMemoryImportResult(payload);
+      const ready = payload.ready ?? 0;
+      const imported = payload.imported ?? 0;
+      const blocked = payload.blocked ?? 0;
+      const duplicates = payload.duplicates ?? 0;
+      setMemoryImportStatus(
+        mode === "import"
+          ? `Import complete: ${imported} imported, ${blocked} blocked, ${duplicates} duplicates.`
+          : `Dry run complete: ${ready} ready, ${blocked} blocked, ${duplicates} duplicates.`
+      );
+      if (mode === "import") {
+        setMemoryImportApproved(false);
+        await refreshMemories(memoryProjectKey, memorySearch);
+      }
+      await refreshActionEvents(memoryProjectKey);
+    } catch (error) {
+      setMemoryImportStatus(error instanceof Error ? error.message : "Memory import failed.");
+    } finally {
+      setMemoryImportBusy(false);
     }
   }
 
@@ -3539,6 +3624,77 @@ export function Chat() {
                 </div>
                 {memoryStatus && <p className="memory-status">{memoryStatus}</p>}
               </form>
+
+              <section className="memory-import-panel" data-testid="memory-import-panel">
+                <div className="memory-import-header">
+                  <div>
+                    <span>Curated memory import</span>
+                    <p>Paste reviewed JSON only. Dry run blocks secrets, raw chats, and duplicates before anything is saved.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setMemoryImportText(JSON.stringify([
+                      {
+                        kind: "decision",
+                        title: "Example curated memory",
+                        content: "Replace this with a short, non-secret project fact or decision.",
+                        project_key: memoryProjectKey,
+                        tags: [memoryProjectKey, "curated"],
+                        priority: 6
+                      }
+                    ], null, 2))}
+                    disabled={memoryImportBusy}
+                  >
+                    Example
+                  </button>
+                </div>
+                <textarea
+                  className="workspace-field workspace-field--multiline memory-import-textarea"
+                  value={memoryImportText}
+                  onChange={(e) => setMemoryImportText(e.target.value)}
+                  placeholder='[{"kind":"decision","title":"...","content":"...","project_key":"jarvis","tags":["curated"],"priority":8}]'
+                  rows={6}
+                />
+                <label className="memory-import-approval">
+                  <input
+                    type="checkbox"
+                    checked={memoryImportApproved}
+                    onChange={(e) => setMemoryImportApproved(e.target.checked)}
+                  />
+                  I reviewed this dry run and approve importing only curated, non-secret memory items.
+                </label>
+                <div className="memory-import-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void runMemoryImport("dry_run")}
+                    disabled={memoryImportBusy || !memoryImportText.trim()}
+                  >
+                    {memoryImportBusy ? "Checking…" : "Dry run"}
+                  </button>
+                  <button
+                    type="button"
+                    className="workspace-create-button"
+                    onClick={() => void runMemoryImport("import")}
+                    disabled={memoryImportBusy || !memoryImportApproved || !memoryImportText.trim()}
+                  >
+                    Import approved memories
+                  </button>
+                </div>
+                {memoryImportStatus && <p className="memory-status">{memoryImportStatus}</p>}
+                {memoryImportResult?.results?.length ? (
+                  <div className="memory-import-results">
+                    {memoryImportResult.results.slice(0, 12).map((result) => (
+                      <div key={`${result.index}-${result.title}`} className={`memory-import-result memory-import-result--${result.action}`}>
+                        <span>{result.action.replace(/_/g, " ")}</span>
+                        <strong>{result.title}</strong>
+                        <small>{result.projectKey}{result.reason ? ` · ${result.reason}` : ""}</small>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
 
               {memories.length ? (
                 <div className="memory-list">

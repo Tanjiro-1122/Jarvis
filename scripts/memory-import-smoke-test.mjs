@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const importLib = fs.readFileSync('lib/memory-import.ts', 'utf8');
 const importRoute = fs.readFileSync('app/api/memory/import/route.ts', 'utf8');
 const roadmap = fs.readFileSync('docs/jarvis-endgame-roadmap.md', 'utf8');
+const chatSource = fs.readFileSync('components/chat.tsx', 'utf8');
 
 const checks = [
   ['memory import lib exists', /previewOrImportMemories/.test(importLib)],
@@ -14,6 +15,8 @@ const checks = [
   ['action logging exists', /memory.import_previewed/.test(importLib) && /memory.imported_batch/.test(importLib)],
   ['import route exists', /ImportSchema/.test(importRoute) && /previewOrImportMemories/.test(importRoute)],
   ['roadmap exists', /Memory Independence/.test(roadmap) && /Hands Phase 1/.test(roadmap) && /Persistent Operator/.test(roadmap)],
+  ['memory import UI exists', chatSource.includes('memory-import-panel')],
+  ['memory import approval flow exists', chatSource.includes('Dry run') && chatSource.includes('Import approved memories')],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);

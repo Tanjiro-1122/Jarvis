@@ -2014,3 +2014,102 @@ button:disabled {
     border-radius: 18px;
   }
 }
+
+.memory-import-panel {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 18px;
+  padding: 0.85rem;
+  background: linear-gradient(135deg, rgba(248, 246, 255, 0.86), rgba(255, 255, 255, 0.78));
+  box-shadow: 0 16px 38px rgba(39, 27, 64, 0.06);
+}
+
+.memory-import-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.memory-import-header span {
+  display: block;
+  color: #241331;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.memory-import-header p,
+.memory-import-results small {
+  color: #6b5f86;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.memory-import-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.76rem;
+}
+
+.memory-import-approval {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: #5b4b78;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.memory-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.memory-import-results {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.memory-import-result {
+  display: grid;
+  gap: 0.16rem;
+  border: 1px solid rgba(100, 116, 166, 0.14);
+  border-radius: 14px;
+  padding: 0.6rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.memory-import-result span {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.12rem 0.42rem;
+  background: rgba(106, 78, 170, 0.12);
+  color: #5b4585;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.memory-import-result strong {
+  color: #241331;
+  font-size: 0.82rem;
+}
+
+.memory-import-result--would_import span,
+.memory-import-result--imported span {
+  background: rgba(42, 157, 111, 0.14);
+  color: #17724c;
+}
+
+.memory-import-result--duplicate span {
+  background: rgba(232, 151, 62, 0.16);
+  color: #94540f;
+}
+
+.memory-import-result--blocked span,
+.memory-import-result--failed span {
+  background: rgba(220, 72, 94, 0.14);
+  color: #a52b42;
+}
