@@ -35,6 +35,8 @@ const TOOL_LABELS: Record<string, string> = {
   execute_code: "Running a safe code check",
   listRepositoryTree: "Inspecting the repository structure",
   readRepositoryFile: "Reading the exact source file",
+  preview_app_creator_proposal: "Previewing app proposal",
+  refine_app_creator_proposal: "Refining app proposal",
   run_app_creator_scaffold_bridge: "Running App Creator bridge",
   approved_app_scaffold: "Generating approved app scaffold",
   create_app_proposal: "Creating app blueprint",
@@ -86,6 +88,8 @@ function getToolDisplayLabel(name: string, args?: Record<string, unknown>, resul
     const stage = typeof args?.action === "string" ? args.action : result?.action;
     return stage ? REPO_STAGE_LABELS[stage] ?? `Running ${humanizeToolName(stage)}` : TOOL_LABELS[name];
   }
+  if (name === "preview_app_creator_proposal") return "Previewing app proposal";
+  if (name === "refine_app_creator_proposal") return "Refining app proposal";
   if (name === "run_app_creator_scaffold_bridge") return "Running App Creator bridge";
   if (name === "approved_app_scaffold") return "Generating approved app scaffold";
   if (name === "create_app_proposal") return "Creating app blueprint";
@@ -244,6 +248,9 @@ type AppCreatorToolResult = {
   safety?: string;
   nextAction?: string;
   error?: string;
+  changedFields?: string[];
+  revision?: number;
+  preview?: { headline?: string; featureCount?: number; screenCount?: number; dataModelCount?: number; scaffoldReady?: boolean; iterationCount?: number };
   changedFiles?: string[];
   prUrl?: string;
   repoFlow?: RepoControlFlowResult;
@@ -286,6 +293,10 @@ function AppCreatorCard({
         </span>
         {plan?.appName && <span className="repo-control-meta">App: {plan.appName} · {plan.platform ?? "web"} · {plan.complexity ?? "standard"}</span>}
         {result?.proposalId && <span className="repo-control-meta">Proposal: {result.proposalId}</span>}
+        {result?.preview && (
+          <span className="repo-control-meta">Preview: {result.preview.featureCount ?? 0} features · {result.preview.screenCount ?? 0} screens · scaffold {result.preview.scaffoldReady ? "ready" : "not ready"}</span>
+        )}
+        {result?.revision && <span className="repo-control-meta">Revision: {result.revision}</span>}
         {result?.message && <p className="build-intel-copy">{result.message}</p>}
         {plan?.coreFeatures && plan.coreFeatures.length > 0 && (
           <div className="repo-flow-step-list">
@@ -296,6 +307,7 @@ function AppCreatorCard({
         )}
         {plan?.screens && plan.screens.length > 0 && <div className="deployment-handoff-line"><strong>Screens:</strong> {plan.screens.slice(0, 6).join(", ")}</div>}
         {plan?.dataModel && plan.dataModel.length > 0 && <div className="deployment-handoff-line"><strong>Data:</strong> {plan.dataModel.slice(0, 4).join(" · ")}</div>}
+        {result?.changedFields && result.changedFields.length > 0 && <div className="deployment-handoff-line"><strong>Changed:</strong> {result.changedFields.slice(0, 6).join(" · ")}</div>}
         {result?.changedFiles && result.changedFiles.length > 0 && <div className="deployment-handoff-line"><strong>Files:</strong> {result.changedFiles.slice(0, 5).join(" · ")}</div>}
         {result?.repoFlow?.steps && result.repoFlow.steps.length > 0 && (
           <div className="repo-flow-step-list">
@@ -1548,6 +1560,8 @@ function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
 
   if (
     invocation.toolName === "create_app_proposal" ||
+    invocation.toolName === "preview_app_creator_proposal" ||
+    invocation.toolName === "refine_app_creator_proposal" ||
     invocation.toolName === "approved_app_scaffold" ||
     invocation.toolName === "run_app_creator_scaffold_bridge"
   ) {

@@ -72,6 +72,41 @@ export interface AppScaffoldBridgeResult {
   nextAction: string;
 }
 
+export interface AppCreatorPreviewResult {
+  ok: boolean;
+  proposalId: string;
+  appPlan?: AppCreatorPlan;
+  status?: string;
+  preview?: {
+    headline: string;
+    featureCount: number;
+    screenCount: number;
+    dataModelCount: number;
+    scaffoldReady: boolean;
+    iterationCount: number;
+  };
+  error?: string;
+  message: string;
+  safety: string;
+  nextAction: string;
+}
+
+export interface AppCreatorRefineInput {
+  proposalId: string;
+  instruction: string;
+  addFeatures?: string[];
+  removeFeatures?: string[];
+  targetUsers?: string | null;
+  complexity?: AppCreatorComplexity;
+  platform?: AppCreatorPlatform;
+}
+
+export interface AppCreatorRefineResult extends AppCreatorPreviewResult {
+  revision?: number;
+  changedFields?: string[];
+  proposal?: RepoActionProposalRow;
+}
+
 function cleanText(value: string | null | undefined, max = 900) {
   return (value ?? "")
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]+/g, " ")
@@ -468,6 +503,197 @@ export function buildAppScaffoldPatch(plan: AppCreatorPlan) {
   return { diff, changedFiles };
 }
 
+
+function isAppCreatorProposal(proposal: RepoActionProposalRow) {
+  const metadata = metadataRecord(proposal.draft_metadata);
+  const appCreator = metadataRecord(metadata.app_creator);
+  return Boolean(appCreator.version) || /^Create app:/i.test(proposal.title);
+}
+
+async function fetchAppCreatorProposal(proposalId: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false as const, error: "Supabase is not configured." };
+
+  const { data, error } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .eq("id", proposalId)
+    .single();
+
+  if (error || !data) {
+    logError("appCreator.fetchAppCreatorProposal", error);
+    return { ok: false as const, error: error?.message || "Proposal not found." };
+  }
+  const proposal = data as RepoActionProposalRow;
+  if (!isAppCreatorProposal(proposal)) {
+    return { ok: false as const, error: "This proposal is not an App Creator proposal." };
+  }
+  return { ok: true as const, proposal };
+}
+
+function appCreatorMetadata(proposal: RepoActionProposalRow) {
+  const metadata = metadataRecord(proposal.draft_metadata);
+  return { metadata, appCreator: metadataRecord(metadata.app_creator) };
+}
+
+function buildPreview(proposal: RepoActionProposalRow, plan: AppCreatorPlan): AppCreatorPreviewResult["preview"] {
+  const { appCreator } = appCreatorMetadata(proposal);
+  const iterations = Array.isArray(appCreator.iterations) ? appCreator.iterations : [];
+  return {
+    headline: `${plan.appName} for ${plan.targetUsers}`,
+    featureCount: plan.coreFeatures.length,
+    screenCount: plan.screens.length,
+    dataModelCount: plan.dataModel.length,
+    scaffoldReady: Boolean(appCreator.scaffold_ready),
+    iterationCount: iterations.length,
+  };
+}
+
+function refinedList(current: string[], add?: string[], remove?: string[]) {
+  const removeSet = new Set((remove || []).map((item) => cleanText(item, 140).toLowerCase()).filter(Boolean));
+  const kept = current.filter((item) => !removeSet.has(item.toLowerCase()));
+  return unique([...kept, ...(add || [])]).slice(0, 8);
+}
+
+export async function previewAppCreatorProposal(options: { proposalId: string }): Promise<AppCreatorPreviewResult> {
+  const proposalId = cleanText(options.proposalId, 120);
+  if (!isRepoActionProposalId(proposalId)) {
+    return { ok: false, proposalId, error: repoActionProposalIdError(proposalId), message: "App Creator preview did not start because the proposal ID was invalid.", safety: "no_action_taken", nextAction: "Use the App Creator proposal UUID." };
+  }
+
+  const fetched = await fetchAppCreatorProposal(proposalId);
+  if (!fetched.ok) {
+    return { ok: false, proposalId, error: fetched.error, message: "App Creator preview could not load the proposal.", safety: "read_only_no_changes", nextAction: "Confirm the proposal ID and try again." };
+  }
+
+  const plan = planFromProposal(fetched.proposal);
+  return {
+    ok: true,
+    proposalId,
+    appPlan: plan,
+    status: fetched.proposal.status,
+    preview: buildPreview(fetched.proposal, plan),
+    message: "App Creator preview loaded. No files, schema, deployment, or production systems were changed.",
+    safety: "preview_only_no_mutation",
+    nextAction: fetched.proposal.status === "approved" ? "Run the scaffold bridge or refine the proposal before scaffolding." : "Review/refine the proposal, then approve it before scaffolding.",
+  };
+}
+
+export async function refineAppCreatorProposal(input: AppCreatorRefineInput): Promise<AppCreatorRefineResult> {
+  const proposalId = cleanText(input.proposalId, 120);
+  const instruction = cleanText(input.instruction, 1200);
+  if (!isRepoActionProposalId(proposalId)) {
+    return { ok: false, proposalId, error: repoActionProposalIdError(proposalId), message: "App Creator refinement did not start because the proposal ID was invalid.", safety: "no_action_taken", nextAction: "Use the App Creator proposal UUID." };
+  }
+  if (!instruction && !input.addFeatures?.length && !input.removeFeatures?.length && !input.targetUsers && !input.complexity && !input.platform) {
+    return { ok: false, proposalId, error: "A refinement instruction is required.", message: "App Creator refinement needs at least one requested change.", safety: "no_action_taken", nextAction: "Describe what should change in the app plan." };
+  }
+
+  const fetched = await fetchAppCreatorProposal(proposalId);
+  if (!fetched.ok) {
+    return { ok: false, proposalId, error: fetched.error, message: "App Creator refinement could not load the proposal.", safety: "no_action_taken", nextAction: "Confirm the proposal ID and try again." };
+  }
+  const proposal = fetched.proposal;
+  if (["executed", "cancelled", "rejected"].includes(proposal.status)) {
+    return { ok: false, proposalId, error: `Cannot refine a ${proposal.status} proposal.`, message: "App Creator refinement stopped safely because this proposal is no longer editable.", safety: "no_action_taken", nextAction: "Create a new App Creator proposal for a new direction." };
+  }
+
+  const currentPlan = planFromProposal(proposal);
+  const changedFields: string[] = [];
+  const lower = instruction.toLowerCase();
+  let features = refinedList(currentPlan.coreFeatures, input.addFeatures, input.removeFeatures);
+  if (lower.includes("premium") || lower.includes("sleek")) features = refinedList(features, ["Premium onboarding experience", "Polished analytics summary"], []);
+  if (lower.includes("login") || lower.includes("auth")) features = refinedList(features, ["Secure sign-in", "Private user profiles"], []);
+  if (lower.includes("mobile")) features = refinedList(features, ["Mobile-first layout"], []);
+
+  const nextPlan: AppCreatorPlan = {
+    ...currentPlan,
+    platform: input.platform ?? (lower.includes("mobile") ? "mobile" : currentPlan.platform),
+    complexity: input.complexity ?? currentPlan.complexity,
+    targetUsers: cleanText(input.targetUsers, 180) || currentPlan.targetUsers,
+    coreFeatures: features,
+  };
+  nextPlan.screens = inferScreens(nextPlan.coreFeatures);
+  nextPlan.dataModel = inferDataModel(nextPlan.coreFeatures);
+  nextPlan.safety = "refined_preview_only_no_files_changed_no_schema_no_deploy";
+
+  if (nextPlan.platform !== currentPlan.platform) changedFields.push("platform");
+  if (nextPlan.complexity !== currentPlan.complexity) changedFields.push("complexity");
+  if (nextPlan.targetUsers !== currentPlan.targetUsers) changedFields.push("targetUsers");
+  if (nextPlan.coreFeatures.join("|") !== currentPlan.coreFeatures.join("|")) changedFields.push("coreFeatures");
+  if (nextPlan.screens.join("|") !== currentPlan.screens.join("|")) changedFields.push("screens");
+  if (nextPlan.dataModel.join("|") !== currentPlan.dataModel.join("|")) changedFields.push("dataModel");
+
+  const { metadata, appCreator } = appCreatorMetadata(proposal);
+  const iterations = Array.isArray(appCreator.iterations) ? appCreator.iterations : [];
+  const revision = iterations.length + 1;
+  const now = new Date().toISOString();
+  const blueprint = buildBlueprint(nextPlan, `${proposal.findings || proposal.summary}\n\nRefinement ${revision}: ${instruction}`, null);
+  const updatedMetadata = {
+    ...metadata,
+    app_creator: {
+      ...appCreator,
+      version: "1.3",
+      phase: "refined_preview",
+      plan: nextPlan,
+      scaffold_ready: false,
+      scaffold_changed_files: [],
+      refinement_required_rescaffold: true,
+      iterations: [...iterations, { revision, instruction, changed_fields: changedFields, refined_at: now }].slice(-20),
+      safety: "refined_preview_only_no_files_changed_no_schema_no_deploy",
+    },
+  };
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { ok: false, proposalId, appPlan: nextPlan, revision, changedFields, error: "Supabase is not configured.", message: "App Creator refinement could not be saved.", safety: "no_repo_mutation_no_schema_no_deploy", nextAction: "Configure Supabase and retry refinement." };
+  }
+  const { data, error } = await supabase
+    .from("jarvis_repo_action_proposals")
+    .update({
+      plan: blueprint,
+      diff_preview: blueprint,
+      draft_metadata: updatedMetadata,
+      updated_at: now,
+    })
+    .eq("id", proposalId)
+    .select("id, title, summary, findings, plan, repo, project_key, risk_level, status, files, diff_preview, approval_note, draft_metadata, session_id, workspace_id, conversation_id, created_at, updated_at, approved_at, executed_at")
+    .single();
+
+  if (error || !data) {
+    logError("appCreator.refineAppCreatorProposal.update", error);
+    return { ok: false, proposalId, appPlan: nextPlan, revision, changedFields, error: error?.message || "Unable to save refinement.", message: "App Creator refinement prepared the new plan but could not save it.", safety: "no_files_changed_no_schema_no_deploy", nextAction: "Retry refinement after checking Supabase." };
+  }
+
+  const updated = data as RepoActionProposalRow;
+  await logActionEvent({
+    eventType: "app_creator.refined",
+    summary: `App Creator refined: ${nextPlan.appName}`,
+    status: "proposed",
+    approvalStage: "plan",
+    riskLevel: updated.risk_level,
+    projectKey: updated.project_key,
+    sessionId: updated.session_id,
+    workspaceId: updated.workspace_id,
+    conversationId: updated.conversation_id,
+    metadata: { proposalId, revision, changedFields, safety: "refined_preview_only_no_files_changed_no_schema_no_deploy" },
+  });
+
+  return {
+    ok: true,
+    proposalId,
+    proposal: updated,
+    appPlan: nextPlan,
+    status: updated.status,
+    preview: buildPreview(updated, nextPlan),
+    revision,
+    changedFields,
+    message: "App Creator v1.3 refined the proposal preview in place. Existing scaffold readiness was reset so the app must be re-scaffolded after approval.",
+    safety: "refined_preview_only_no_files_changed_no_schema_no_deploy",
+    nextAction: updated.status === "approved" ? "Re-run approved_app_scaffold or the scaffold bridge to regenerate the patch from the refined plan." : "Review the refined proposal and approve it before scaffolding.",
+  };
+}
+
 export async function createApprovedAppScaffold(options: { proposalId: string }): Promise<AppScaffoldResult> {
   const proposalId = cleanText(options.proposalId, 120);
   if (!isRepoActionProposalId(proposalId)) {
@@ -514,8 +740,7 @@ export async function createApprovedAppScaffold(options: { proposalId: string })
   const proposal = existing as RepoActionProposalRow;
   const metadata = metadataRecord(proposal.draft_metadata);
   const appCreator = metadataRecord(metadata.app_creator);
-  const isAppCreatorProposal = Boolean(appCreator.version) || /^Create app:/i.test(proposal.title);
-  if (!isAppCreatorProposal) {
+  if (!isAppCreatorProposal(proposal)) {
     return {
       ok: false,
       proposalId,
