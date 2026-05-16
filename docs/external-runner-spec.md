@@ -213,3 +213,27 @@ appDir remains inside apps/<slug>
 ```
 
 v1.8 is verification-only. It must not deploy, create public previews, mutate schemas, write env vars, change payments, merge code, or launch to customers.
+
+
+## Owner-only hosted preview gate v1.9
+
+After private access verification passes, Jarvis may prepare a hosted preview gate with:
+
+```txt
+npm run prepare-owner-preview -- --proposal-id=<uuid>
+```
+
+The gate reads:
+
+```txt
+.jarvis/private-deployments/<proposal-id>.json
+.jarvis/private-access-verifications/<proposal-id>.json
+```
+
+The gate writes:
+
+```txt
+.jarvis/private-preview-gates/<proposal-id>.json
+```
+
+v1.9 is gate-only. It validates that the artifact and verification are owner-only, authenticated, non-public, non-customer-facing, and inside `apps/<slug>`. It must not deploy, create a preview URL, run Vercel, merge, mutate schemas, write env vars, change payments, or launch to customers. A future hosting step must require the separate approval phrase `APPROVE OWNER PREVIEW HOSTING`.
