@@ -6,6 +6,7 @@ const ui = fs.readFileSync("components/chat.tsx", "utf8");
 const css = fs.readFileSync("app/globals.css", "utf8");
 const pkg = fs.readFileSync("package.json", "utf8");
 const privateExecutor = fs.readFileSync("scripts/private-owner-deploy.mjs", "utf8");
+const privateVerifier = fs.readFileSync("scripts/verify-private-owner-access.mjs", "utf8");
 
 function assert(condition, message) {
   if (!condition) {

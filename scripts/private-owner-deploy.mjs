@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { mkdir, writeFile } from "node:fs/promises";
+import { validatePrivateOwnerAccessManifest } from "./verify-private-owner-access.mjs";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -97,7 +98,25 @@ async function main() {
   };
 
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  console.log(`Private owner executor completed artifact-only manifest: ${path.relative(process.cwd(), manifestPath)}`);
+
+  const verification = validatePrivateOwnerAccessManifest(manifest, { proposalId, cwd: process.cwd() });
+  const verificationDir = path.join(process.cwd(), ".jarvis", "private-access-verifications");
+  await mkdir(verificationDir, { recursive: true });
+  const verificationPath = path.join(verificationDir, `${proposalId}.json`);
+  await writeFile(verificationPath, `${JSON.stringify({
+    ...verification,
+    manifestPath: path.relative(process.cwd(), manifestPath),
+    publicLaunch: false,
+    customerFacing: false,
+    schemaMutation: false,
+    paymentsChange: false,
+  }, null, 2)}\n`, "utf8");
+
+  if (!verification.ok) {
+    throw new Error(`Private access verification blocked after artifact creation: ${verification.blockers.join(", ")}`);
+  }
+
+  console.log(`Private owner executor completed artifact-only manifest and access verification: ${path.relative(process.cwd(), manifestPath)} · ${path.relative(process.cwd(), verificationPath)}`);
 }
 
 main().catch((error) => {

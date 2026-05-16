@@ -7,6 +7,7 @@ const roadmap = fs.readFileSync('docs/jarvis-endgame-roadmap.md', 'utf8');
 const externalRunnerSpec = fs.readFileSync('docs/external-runner-spec.md', 'utf8');
 const trustedRunner = fs.readFileSync('scripts/trusted-runner.mjs', 'utf8');
 const privateOwnerDeploy = fs.readFileSync('scripts/private-owner-deploy.mjs', 'utf8');
+const privateAccessVerifier = fs.readFileSync('scripts/verify-private-owner-access.mjs', 'utf8');
 const packageJson = fs.readFileSync('package.json', 'utf8');
 const deploymentControl = fs.readFileSync('lib/deployment-control.ts', 'utf8');
 const chatUi = fs.readFileSync('components/chat.tsx', 'utf8');
@@ -26,11 +27,13 @@ const checks = [
   ['chat auto-checkpoint exists', /addWorkspaceTaskCheckpoint/.test(chatRoute) && /Chat task completed/.test(chatRoute) && /Chat task interrupted/.test(chatRoute)],
   ['cli runner queued jobs exist', /queueCliRunnerJob/.test(cliRunnerJobs) && /queued_only_no_local_execution/.test(cliRunnerJobs) && /intent: \"cli_runner\"/.test(cliRunnerJobs)],
   ['external runner spec exists', /External Runner Spec v1/.test(externalRunnerSpec) && /JARVIS_RUNNER_TOKEN/.test(externalRunnerSpec) && /APPROVE JARVIS ROLLBACK/.test(externalRunnerSpec) && /must not execute/.test(externalRunnerSpec)],
-  ['private app creator runner spec exists', /private_app_creator_deploy/.test(externalRunnerSpec) && /APPROVE PRIVATE JARVIS DEPLOY/.test(externalRunnerSpec) && /owner_only_authenticated_javier/.test(externalRunnerSpec) && /owner-only artifact executor/.test(externalRunnerSpec)],
+  ['private app creator runner spec exists', /private_app_creator_deploy/.test(externalRunnerSpec) && /APPROVE PRIVATE JARVIS DEPLOY/.test(externalRunnerSpec) && /owner_only_authenticated_javier/.test(externalRunnerSpec) && /owner-only artifact executor/.test(externalRunnerSpec) && /Private access verification v1.8/.test(externalRunnerSpec)],
   ['trusted runner script exists', /trusted runner starting/.test(trustedRunner) && /JARVIS_RUNNER_DRY_RUN/.test(trustedRunner) && /ALLOW_DRY_RUN_CLAIM/.test(trustedRunner) && /spawn\(command, args/.test(trustedRunner)],
   ['private app creator dry-run validator exists', /validatePrivateAppCreatorDeployMetadata/.test(trustedRunner) && /Private App Creator deploy dry-run passed/.test(trustedRunner) && /owner_only_not_true/.test(trustedRunner) && /executor_mode_not_allowed_private_owner_mode/.test(trustedRunner)],
   ['private owner executor exists', /private-owner-deploy/.test(packageJson) && /JARVIS_PRIVATE_OWNER_EXECUTOR_MODE/.test(trustedRunner) && /JARVIS_PRIVATE_DEPLOY_METADATA_BASE64/.test(trustedRunner) && /private_owner_executor_artifact_only_no_public_launch_no_prod_deploy/.test(privateOwnerDeploy)],
   ['private owner executor blocks public deploy', !/--prod/.test(privateOwnerDeploy) && !/vercel deploy/.test(privateOwnerDeploy) && /publicLaunch: false/.test(privateOwnerDeploy) && /customerFacing: false/.test(privateOwnerDeploy)],
+  ['private access verifier exists', /verify-private-owner-access/.test(packageJson) && /validatePrivateOwnerAccessManifest/.test(privateAccessVerifier) && /private_access_verified_owner_only_no_public_launch/.test(privateAccessVerifier) && /private-access-verifications/.test(privateAccessVerifier)],
+  ['private access verifier blocks public deploy', !/--prod/.test(privateAccessVerifier) && !/vercel deploy/.test(privateAccessVerifier) && /deployed_publicly_must_be_false/.test(privateAccessVerifier) && /vercel_prod_must_be_false/.test(privateAccessVerifier)],
   ['runner dashboard visibility exists', /runner-status-card/.test(chatUi) && /runnerMetadata\?\.job_kind/.test(chatUi) && /runner-command-preview/.test(css)],
   ['runner workspace handoff exists', /workspaceId: workspaceId \?\? null/.test(chatRoute) && /workspaceId: options\.workspaceId/.test(deploymentControl) && /conversationId: options\.conversationId/.test(deploymentControl)],
   ['external services UI exists', /externalServices/.test(chatUi) && /external-service-list/.test(css) && /RevenueCat, App Store Connect, and Google Play/.test(chatUi)],

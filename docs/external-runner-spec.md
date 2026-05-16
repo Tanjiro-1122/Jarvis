@@ -184,3 +184,32 @@ no schema mutation
 no payment changes
 no customer-facing release
 ```
+
+
+## Private access verification v1.8
+
+After the owner-only artifact executor creates `.jarvis/private-deployments/<proposal-id>.json`, Jarvis verifies the artifact with:
+
+```txt
+npm run verify-private-owner-access -- --proposal-id=<uuid>
+```
+
+The verifier writes `.jarvis/private-access-verifications/<proposal-id>.json` and checks:
+
+```txt
+ownerOnly === true
+targetAudience === "javier_only"
+productionClass === "private_owner_only"
+publicLaunch === false
+customerFacing === false
+paymentsChange === false
+schemaMutation === false
+authRequired === true
+accessPolicy === "owner_only_authenticated_javier"
+artifactOnly === true
+deployedPublicly === false
+vercelProd === false
+appDir remains inside apps/<slug>
+```
+
+v1.8 is verification-only. It must not deploy, create public previews, mutate schemas, write env vars, change payments, merge code, or launch to customers.
