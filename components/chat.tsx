@@ -62,6 +62,8 @@ const DEPLOYMENT_ACTION_LABELS: Record<string, string> = {
   inspect: "Inspecting deployments",
   prepare_redeploy: "Preparing redeploy approval",
   prepare_rollback: "Preparing rollback approval",
+  execute_redeploy: "Checking redeploy approval gate",
+  execute_rollback: "Checking rollback approval gate",
 };
 
 function humanizeToolName(name: string) {
@@ -178,7 +180,26 @@ type RepoControlToolResult = {
   stoppedAt?: string;
   error?: string;
   message?: string;
-  steps?: Array<{ action?: string; ok?: boolean; error?: string; summary?: string }>;
+  prUrl?: string;
+  overallReady?: boolean;
+  readinessSummary?: string;
+  readinessReasons?: string[];
+  blocked?: boolean;
+  expectedApproval?: string;
+  documentedCommand?: string;
+  safety?: string;
+  result?: {
+    blocked?: boolean;
+    expectedApproval?: string;
+    documentedCommand?: string;
+    safety?: string;
+    error?: string;
+    message?: string;
+    overallReady?: boolean;
+    readinessSummary?: string;
+    readinessReasons?: string[];
+  };
+  steps?: Array<{ action?: string; step?: string; ok?: boolean; error?: string; summary?: string }>;
 };
 
 function RepoControlCard({
@@ -198,6 +219,13 @@ function RepoControlCard({
   const proposalId = result?.proposalId || (typeof args.proposalId === "string" ? args.proposalId : undefined);
   const stage = result?.action || (typeof args.action === "string" ? args.action : undefined);
   const steps = Array.isArray(result?.steps) ? result.steps.slice(0, 7) : [];
+  const nestedResult = result?.result;
+  const readinessSummary = result?.readinessSummary || nestedResult?.readinessSummary;
+  const readinessReasons = result?.readinessReasons || nestedResult?.readinessReasons || [];
+  const expectedApproval = result?.expectedApproval || nestedResult?.expectedApproval;
+  const documentedCommand = result?.documentedCommand || nestedResult?.documentedCommand;
+  const safety = result?.safety || nestedResult?.safety;
+  const blocked = Boolean(result?.blocked || nestedResult?.blocked || safety?.includes("blocked"));
 
   return (
     <div className={`tool-card tool-card--repo-control ${isPending ? "tool-card--pending" : ""} ${failed ? "tool-card--failed" : ""}`}>
@@ -210,14 +238,41 @@ function RepoControlCard({
         {proposalId && <span className="repo-control-meta">Proposal: {proposalId}</span>}
         {stage && <span className="repo-control-meta">Stage: {stage.replace(/_/g, " ")}</span>}
         {result?.repo && <span className="repo-control-meta">Repo: {result.repo}</span>}
+        {result?.prUrl && (
+          <a className="repo-control-link" href={result.prUrl} target="_blank" rel="noopener noreferrer">
+            Open pull request ↗
+          </a>
+        )}
         {result?.message && <span>{result.message}</span>}
+        {readinessSummary && (
+          <div className={`repo-control-status ${result?.overallReady || nestedResult?.overallReady ? "repo-control-status--ready" : "repo-control-status--waiting"}`}>
+            <strong>{result?.overallReady || nestedResult?.overallReady ? "Ready" : "Waiting"}</strong>
+            <span>{readinessSummary}</span>
+            {readinessReasons.length > 0 && (
+              <ul>
+                {readinessReasons.slice(0, 4).map((reason, index) => (
+                  <li key={`${reason}-${index}`}>{reason}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {(blocked || expectedApproval || documentedCommand) && (
+          <div className="repo-control-status repo-control-status--blocked">
+            <strong>{blocked ? "Blocked safely" : "Approval gate"}</strong>
+            {expectedApproval && <span>Required phrase: {expectedApproval}</span>}
+            {documentedCommand && <code>{documentedCommand}</code>}
+            {safety && <span>Safety: {safety.replace(/_/g, " ")}</span>}
+          </div>
+        )}
         {result?.error && <span className="tool-error">{result.error}</span>}
+        {nestedResult?.error && <span className="tool-error">{nestedResult.error}</span>}
         {steps.length > 0 && (
           <ol className="repo-control-steps">
             {steps.map((step, index) => (
               <li key={`${step.action || "step"}-${index}`} className={step.ok ? "repo-control-step--ok" : "repo-control-step--blocked"}>
                 <span>{step.ok ? "✓" : "!"}</span>
-                <span>{(step.action || "stage").replace(/_/g, " ")}</span>
+                <span>{(step.action || step.step || "stage").replace(/_/g, " ")}</span>
                 {step.error && <em>{step.error}</em>}
               </li>
             ))}

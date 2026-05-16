@@ -1374,3 +1374,64 @@ button:disabled {
   color: #9f1239;
   font-weight: 700;
 }
+
+
+.repo-control-link {
+  color: #5b21b6;
+  font-size: 0.8rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.repo-control-link:hover {
+  text-decoration: underline;
+}
+
+.repo-control-status {
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  background: rgba(255, 255, 255, 0.62);
+  display: grid;
+  gap: 0.3rem;
+  color: #33265f;
+}
+
+.repo-control-status strong {
+  font-size: 0.76rem;
+  color: #4c1d95;
+}
+
+.repo-control-status span,
+.repo-control-status li,
+.repo-control-status code {
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.repo-control-status ul {
+  margin: 0.1rem 0 0;
+  padding-left: 1rem;
+}
+
+.repo-control-status code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #1f1147;
+}
+
+.repo-control-status--ready {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: rgba(240, 253, 244, 0.72);
+}
+
+.repo-control-status--waiting {
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(255, 251, 235, 0.76);
+}
+
+.repo-control-status--blocked {
+  border-color: rgba(225, 29, 72, 0.2);
+  background: rgba(255, 241, 242, 0.72);
+}
