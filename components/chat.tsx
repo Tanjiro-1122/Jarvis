@@ -35,6 +35,7 @@ const TOOL_LABELS: Record<string, string> = {
   execute_code: "Running a safe code check",
   listRepositoryTree: "Inspecting the repository structure",
   readRepositoryFile: "Reading the exact source file",
+  queue_private_app_creator_deploy: "Queueing private deploy",
   prepare_app_creator_preview_handoff: "Preparing preview handoff",
   preview_app_creator_proposal: "Previewing app proposal",
   refine_app_creator_proposal: "Refining app proposal",
@@ -89,6 +90,7 @@ function getToolDisplayLabel(name: string, args?: Record<string, unknown>, resul
     const stage = typeof args?.action === "string" ? args.action : result?.action;
     return stage ? REPO_STAGE_LABELS[stage] ?? `Running ${humanizeToolName(stage)}` : TOOL_LABELS[name];
   }
+  if (name === "queue_private_app_creator_deploy") return "Queueing private deploy";
   if (name === "prepare_app_creator_preview_handoff") return "Preparing preview handoff";
   if (name === "preview_app_creator_proposal") return "Previewing app proposal";
   if (name === "refine_app_creator_proposal") return "Refining app proposal";
@@ -254,6 +256,9 @@ type AppCreatorToolResult = {
   revision?: number;
   preview?: { headline?: string; featureCount?: number; screenCount?: number; dataModelCount?: number; scaffoldReady?: boolean; iterationCount?: number };
   previewHandoff?: { intent?: string; appName?: string; slug?: string; targetUsers?: string; ready?: boolean; prUrl?: string; prBranch?: string; requiredApprovalPhrase?: string; generatedFiles?: string[]; preparedAt?: string };
+  taskId?: string;
+  commandPreview?: string;
+  requiredApprovalPhrase?: string;
   changedFiles?: string[];
   prUrl?: string;
   repoFlow?: RepoControlFlowResult;
@@ -316,6 +321,9 @@ function AppCreatorCard({
         )}
         {result?.previewHandoff?.prUrl && <a className="repo-control-link" href={result.previewHandoff.prUrl} target="_blank" rel="noreferrer">Open preview PR</a>}
         {result?.previewHandoff?.generatedFiles && result.previewHandoff.generatedFiles.length > 0 && <div className="deployment-handoff-line"><strong>Preview files:</strong> {result.previewHandoff.generatedFiles.slice(0, 5).join(" · ")}</div>}
+        {result?.taskId && <div className="deployment-handoff-line"><strong>Private job:</strong> queued · {result.taskId}</div>}
+        {result?.commandPreview && <div className="runner-command-preview">{result.commandPreview}</div>}
+        {result?.requiredApprovalPhrase && <div className="deployment-handoff-boundary">Private owner-only gate · requires {result.requiredApprovalPhrase} · no public launch.</div>}
         {result?.changedFiles && result.changedFiles.length > 0 && <div className="deployment-handoff-line"><strong>Files:</strong> {result.changedFiles.slice(0, 5).join(" · ")}</div>}
         {result?.repoFlow?.steps && result.repoFlow.steps.length > 0 && (
           <div className="repo-flow-step-list">
@@ -1273,6 +1281,7 @@ function getTaskStatusLabel(status: WorkspaceTaskSummary["status"]) {
 function getRunnerJobLabel(kind?: string) {
   if (kind === "vercel_redeploy") return "Vercel redeploy";
   if (kind === "vercel_rollback") return "Vercel rollback";
+  if (kind === "private_app_creator_deploy") return "Private App Creator deploy";
   if (kind === "repo_check") return "Repo check";
   if (kind === "maintenance") return "Maintenance";
   return kind ? kind.replace(/_/g, " ") : null;
@@ -1568,6 +1577,7 @@ function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
 
   if (
     invocation.toolName === "create_app_proposal" ||
+    invocation.toolName === "queue_private_app_creator_deploy" ||
     invocation.toolName === "prepare_app_creator_preview_handoff" ||
     invocation.toolName === "preview_app_creator_proposal" ||
     invocation.toolName === "refine_app_creator_proposal" ||

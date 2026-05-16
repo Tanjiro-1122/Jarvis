@@ -13,6 +13,7 @@ const EXECUTE = (process.env.JARVIS_RUNNER_EXECUTION_MODE || "dry-run").toLowerC
 const EXACT_APPROVALS = new Map([
   ["vercel_redeploy", "APPROVE JARVIS REDEPLOY"],
   ["vercel_rollback", "APPROVE JARVIS ROLLBACK"],
+  ["private_app_creator_deploy", "APPROVE PRIVATE JARVIS DEPLOY"],
 ]);
 
 function requireEnv() {
@@ -66,6 +67,12 @@ function validateTask(task) {
   }
   if (kind === "vercel_rollback" && !/^vercel rollback \S+ --token=\$VERCEL_TOKEN$/.test(command)) {
     return { ok: false, error: "Rollback command does not match the allowed Vercel command shape." };
+  }
+  if (kind === "private_app_creator_deploy") {
+    if (!/^npm run private-owner-deploy -- --proposal-id=[0-9a-f-]+ --owner-only=true$/.test(command)) {
+      return { ok: false, error: "Private App Creator deployment command does not match the owner-only command shape." };
+    }
+    return { ok: false, error: "Private App Creator deployment executor is intentionally not implemented in runner v1.5; job remains queued/visible until a dedicated owner-only executor is approved." };
   }
   if (!EXACT_APPROVALS.has(kind)) {
     return { ok: false, error: `Execution for job kind ${kind} is not implemented in runner v1.` };

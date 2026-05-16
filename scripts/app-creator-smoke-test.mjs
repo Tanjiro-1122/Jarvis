@@ -19,6 +19,7 @@ assert(/runAppCreatorScaffoldBridge/.test(lib), "App Creator must expose scaffol
 assert(/previewAppCreatorProposal/.test(lib), "App Creator must expose preview loop.");
 assert(/refineAppCreatorProposal/.test(lib), "App Creator must expose refinement loop.");
 assert(/prepareAppCreatorPreviewHandoff/.test(lib), "App Creator must expose preview deployment handoff.");
+assert(/queuePrivateAppCreatorDeploy/.test(lib), "App Creator must expose private production queue gate.");
 assert(/buildAppScaffoldPatch/.test(lib), "App Creator must build deterministic scaffold patches.");
 assert(/blueprint_only_no_files_changed_no_schema_no_deploy/.test(lib), "App Creator must enforce blueprint-only v1 safety.");
 assert(/approved_scaffold_patch_no_merge_no_deploy/.test(lib), "App Creator scaffold must not merge or deploy.");
@@ -28,6 +29,9 @@ assert(/refinement_required_rescaffold/.test(lib), "App Creator refinement must 
 assert(/refined_preview_only_no_files_changed_no_schema_no_deploy/.test(lib), "App Creator refinement must not change files/schema/deploy.");
 assert(/metadata_only_no_deploy_no_merge_no_schema_mutation/.test(lib), "App Creator preview handoff must be metadata-only.");
 assert(/prepareRepoDeploymentHandoff/.test(lib), "App Creator preview handoff must wrap existing Repo Control deployment handoff.");
+assert(/APPROVE PRIVATE JARVIS DEPLOY/.test(lib), "App Creator private deploy must require exact private approval phrase.");
+assert(/queued_private_owner_only_no_public_launch_no_merge_no_schema_mutation/.test(lib), "App Creator private deploy must be owner-only and queue-only.");
+assert(/queueCliRunnerJob/.test(lib), "App Creator private deploy must queue through the trusted runner system.");
 assert(/runRepoControlFlow/.test(lib), "App Creator bridge must route through Repo Control flow.");
 assert(/Proposal must be approved before scaffolding/.test(lib), "App Creator scaffold must require proposal approval.");
 assert(/createRepoActionProposal/.test(lib), "App Creator must route through Repo Control.");
@@ -37,6 +41,7 @@ assert(/run_app_creator_scaffold_bridge/.test(route), "Chat must expose run_app_
 assert(/preview_app_creator_proposal/.test(route), "Chat must expose preview_app_creator_proposal tool.");
 assert(/refine_app_creator_proposal/.test(route), "Chat must expose refine_app_creator_proposal tool.");
 assert(/prepare_app_creator_preview_handoff/.test(route), "Chat must expose prepare_app_creator_preview_handoff tool.");
+assert(/queue_private_app_creator_deploy/.test(route), "Chat must expose queue_private_app_creator_deploy tool.");
 assert(/does not edit files, create schemas, deploy, or open a PR/.test(route), "Tool description must state no direct mutation.");
 assert(/Jarvis can create apps through the controlled App Creator workflow/.test(route), "System prompt must answer app creation accurately.");
 assert(/AppCreatorCard/.test(ui), "Chat UI must render App Creator card.");
@@ -44,6 +49,7 @@ assert(/changedFiles/.test(ui), "App Creator card must surface generated scaffol
 assert(/repoFlow/.test(ui) && /prUrl/.test(ui), "App Creator card must surface bridge Repo Control and PR details.");
 assert(/changedFields/.test(ui) && /revision/.test(ui), "App Creator card must surface refinement details.");
 assert(/previewHandoff/.test(ui), "App Creator card must surface preview handoff details.");
+assert(/taskId/.test(ui) && /Private App Creator deploy/.test(ui), "App Creator card/dashboard must surface private deploy runner jobs.");
 assert(/tool-card--app-creator/.test(ui) && /tool-card--app-creator/.test(css), "App Creator UI styling must exist.");
 
 console.log("✅ App Creator smoke test passed.");

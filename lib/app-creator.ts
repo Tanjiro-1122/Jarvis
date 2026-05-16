@@ -1,3 +1,4 @@
+import { queueCliRunnerJob } from "@/lib/cli-runner-jobs";
 import { createRepoActionProposal, isRepoActionProposalId, prepareRepoDeploymentHandoff, repoActionProposalIdError, runRepoControlFlow, type RepoControlFlowResult, type RepoDeploymentPrepResult, type RepoActionFileTarget, type RepoActionProposalRow, type RepoActionRisk } from "@/lib/repo-actions";
 import { getSupabaseClient } from "@/lib/supabase";
 import { logError } from "@/lib/errors";
@@ -5,6 +6,8 @@ import { logActionEvent } from "@/lib/action-events";
 
 export type AppCreatorPlatform = "web" | "mobile" | "both";
 export type AppCreatorComplexity = "simple" | "standard" | "advanced";
+
+const PRIVATE_DEPLOY_APPROVAL_PHRASE = "APPROVE PRIVATE JARVIS DEPLOY";
 
 export interface AppCreatorInput {
   idea: string;
@@ -124,6 +127,21 @@ export interface AppCreatorPreviewHandoffResult {
     generatedFiles: string[];
     preparedAt: string;
   };
+  error?: string;
+  message: string;
+  safety: string;
+  nextAction: string;
+}
+
+export interface AppCreatorPrivateDeployQueueResult {
+  ok: boolean;
+  proposalId: string;
+  appPlan?: AppCreatorPlan;
+  previewHandoff?: AppCreatorPreviewHandoffResult["previewHandoff"];
+  taskId?: string;
+  task?: unknown;
+  commandPreview?: string;
+  requiredApprovalPhrase: string;
   error?: string;
   message: string;
   safety: string;
@@ -989,6 +1007,189 @@ export async function prepareAppCreatorPreviewHandoff(options: { proposalId: str
     nextAction: deploymentPrep.ready
       ? "Review the PR/preview handoff. Any actual deployment still requires the exact deployment approval phrase."
       : deploymentPrep.nextAction,
+  };
+}
+
+
+export async function queuePrivateAppCreatorDeploy(options: {
+  proposalId: string;
+  approvalText?: string | null;
+  reason?: string | null;
+  workspaceId?: string | null;
+  conversationId?: string | null;
+}): Promise<AppCreatorPrivateDeployQueueResult> {
+  const proposalId = cleanText(options.proposalId, 120);
+  const approvalText = cleanText(options.approvalText || "", 120);
+  if (!isRepoActionProposalId(proposalId)) {
+    return {
+      ok: false,
+      proposalId,
+      requiredApprovalPhrase: PRIVATE_DEPLOY_APPROVAL_PHRASE,
+      error: repoActionProposalIdError(proposalId),
+      message: "Private App Creator deploy queue did not start because the proposal ID was invalid.",
+      safety: "blocked_no_private_deploy_job_no_public_production",
+      nextAction: "Use the App Creator proposal UUID from the proposal card.",
+    };
+  }
+
+  if (approvalText !== PRIVATE_DEPLOY_APPROVAL_PHRASE) {
+    await logActionEvent({
+      eventType: "app_creator.private_deploy.blocked",
+      summary: "Private App Creator deploy blocked: approval phrase missing",
+      status: "blocked",
+      approvalStage: "approval",
+      riskLevel: "medium",
+      projectKey: "jarvis",
+      workspaceId: options.workspaceId || null,
+      conversationId: options.conversationId || null,
+      metadata: { proposalId, reason_blocked: "approval_text_mismatch", expectedApproval: PRIVATE_DEPLOY_APPROVAL_PHRASE, safety: "blocked_no_private_deploy_job_no_public_production" },
+    });
+    return {
+      ok: false,
+      proposalId,
+      requiredApprovalPhrase: PRIVATE_DEPLOY_APPROVAL_PHRASE,
+      error: `Private owner-only deploy queue requires exact approval text: ${PRIVATE_DEPLOY_APPROVAL_PHRASE}`,
+      message: "Private App Creator deploy queue was blocked before creating a runner job.",
+      safety: "blocked_no_private_deploy_job_no_public_production",
+      nextAction: `If Javier wants an owner-only private deployment job queued, provide: ${PRIVATE_DEPLOY_APPROVAL_PHRASE}`,
+    };
+  }
+
+  const handoff = await prepareAppCreatorPreviewHandoff({ proposalId });
+  if (!handoff.ok || !handoff.previewHandoff?.ready) {
+    return {
+      ok: false,
+      proposalId,
+      appPlan: handoff.appPlan,
+      previewHandoff: handoff.previewHandoff,
+      requiredApprovalPhrase: PRIVATE_DEPLOY_APPROVAL_PHRASE,
+      error: handoff.error || "Preview handoff is not ready.",
+      message: "Private App Creator deploy queue stopped safely because the preview handoff is not ready.",
+      safety: "blocked_no_private_deploy_job_no_public_production",
+      nextAction: handoff.nextAction || "Prepare a ready preview handoff first.",
+    };
+  }
+
+  const fetched = await fetchAppCreatorProposal(proposalId);
+  if (!fetched.ok) {
+    return {
+      ok: false,
+      proposalId,
+      requiredApprovalPhrase: PRIVATE_DEPLOY_APPROVAL_PHRASE,
+      error: fetched.error,
+      message: "Private App Creator deploy queue could not reload the proposal.",
+      safety: "blocked_no_private_deploy_job_no_public_production",
+      nextAction: "Confirm the proposal ID and retry.",
+    };
+  }
+
+  const proposal = fetched.proposal;
+  const plan = handoff.appPlan || planFromProposal(proposal);
+  const command = `npm run private-owner-deploy -- --proposal-id=${proposalId} --owner-only=true`;
+  const queued = await queueCliRunnerJob({
+    workspaceId: options.workspaceId || proposal.workspace_id || process.env.JARVIS_DEFAULT_WORKSPACE_ID || null,
+    conversationId: options.conversationId || proposal.conversation_id || null,
+    title: `Private owner-only deploy: ${plan.appName}`,
+    command,
+    kind: "private_app_creator_deploy",
+    riskLevel: "medium",
+    approvalText,
+    reason: options.reason || "Owner-only private production for Javier.",
+    metadata: {
+      proposalId,
+      appName: plan.appName,
+      slug: plan.slug,
+      ownerOnly: true,
+      targetAudience: "javier_only",
+      productionClass: "private_owner_only",
+      publicLaunch: false,
+      customerFacing: false,
+      paymentsChange: false,
+      schemaMutation: false,
+      previewHandoff: handoff.previewHandoff,
+      safety: "queued_private_owner_only_no_public_launch_no_merge_no_schema_mutation",
+    },
+  });
+
+  if (!queued.ok) {
+    await logActionEvent({
+      eventType: "app_creator.private_deploy.queue_blocked",
+      summary: `Private App Creator deploy queue failed: ${plan.appName}`,
+      status: "blocked",
+      approvalStage: "action",
+      riskLevel: "medium",
+      projectKey: proposal.project_key,
+      workspaceId: options.workspaceId || proposal.workspace_id || null,
+      conversationId: options.conversationId || proposal.conversation_id || null,
+      metadata: { proposalId, error: queued.error, commandPreview: command, safety: "approved_but_not_queued_no_private_deploy" },
+    });
+    return {
+      ok: false,
+      proposalId,
+      appPlan: plan,
+      previewHandoff: handoff.previewHandoff,
+      requiredApprovalPhrase: PRIVATE_DEPLOY_APPROVAL_PHRASE,
+      commandPreview: command,
+      error: queued.error,
+      message: "Private App Creator deploy was approved but the runner job could not be queued.",
+      safety: "approved_but_not_queued_no_private_deploy",
+      nextAction: "Check workspace/runner queue configuration, then retry.",
+    };
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    const { metadata, appCreator } = appCreatorMetadata(proposal);
+    await supabase
+      .from("jarvis_repo_action_proposals")
+      .update({
+        draft_metadata: {
+          ...metadata,
+          app_creator: {
+            ...appCreator,
+            version: "1.5",
+            phase: "private_owner_deploy_queued",
+            private_deploy_queue: {
+              taskId: queued.taskId,
+              queuedAt: new Date().toISOString(),
+              commandPreview: command,
+              approvalPhrase: PRIVATE_DEPLOY_APPROVAL_PHRASE,
+              ownerOnly: true,
+              targetAudience: "javier_only",
+              publicLaunch: false,
+              safety: "queued_private_owner_only_no_public_launch_no_merge_no_schema_mutation",
+            },
+          },
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", proposalId);
+  }
+
+  await logActionEvent({
+    eventType: "app_creator.private_deploy.queued",
+    summary: `Private App Creator deploy queued: ${plan.appName}`,
+    status: "approved",
+    approvalStage: "action",
+    riskLevel: "medium",
+    projectKey: proposal.project_key,
+    workspaceId: options.workspaceId || proposal.workspace_id || null,
+    conversationId: options.conversationId || proposal.conversation_id || null,
+    metadata: { proposalId, taskId: queued.taskId, commandPreview: command, ownerOnly: true, targetAudience: "javier_only", safety: "queued_private_owner_only_no_public_launch_no_merge_no_schema_mutation" },
+  });
+
+  return {
+    ok: true,
+    proposalId,
+    appPlan: plan,
+    previewHandoff: handoff.previewHandoff,
+    taskId: queued.taskId,
+    task: queued.task,
+    commandPreview: command,
+    requiredApprovalPhrase: PRIVATE_DEPLOY_APPROVAL_PHRASE,
+    message: "App Creator v1.5 queued a private owner-only production job for the trusted runner. Jarvis did not deploy from chat, merge, mutate schema, or make the app public.",
+    safety: "queued_private_owner_only_no_public_launch_no_merge_no_schema_mutation",
+    nextAction: "Watch the Runner dashboard. The current runner will keep this private job visible until a dedicated owner-only executor is approved/enabled.",
   };
 }
 
