@@ -11,7 +11,7 @@ function assert(condition, message) {
 const chat = fs.readFileSync("components/chat.tsx", "utf8");
 const css = fs.readFileSync("app/globals.css", "utf8");
 
-assert(chat.includes("Control Tower v2"), "Control Tower v2 label exists");
+assert(chat.includes("Control Tower v3"), "Control Tower v3 label exists");
 assert(chat.includes('data-testid="operator-control-tower-card"'), "control tower test id exists");
 assert(chat.includes("getOperatorNextAction"), "recommended next action helper exists");
 assert(chat.includes("operatorNextAction.title"), "next action title renders");

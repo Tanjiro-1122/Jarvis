@@ -1574,6 +1574,97 @@ function getOperatorNextAction(options: {
   };
 }
 
+type OperatorCommandCard = {
+  key: string;
+  eyebrow: string;
+  title: string;
+  detail: string;
+  tone: string;
+  actionLabel: string;
+  targetDrawer: CabinetDrawerKey;
+};
+
+function getProposalReadinessLabel(proposal: RepoActionProposalSummary | null, latestRepoPrReady: boolean) {
+  if (!proposal) return "No proposal loaded";
+  if (latestRepoPrReady) return "PR ready";
+  if (proposal.status === "approved") return "Approved checkpoint";
+  if (proposal.status === "blocked") return "Blocked";
+  if (proposal.status === "rejected") return "Rejected";
+  if (proposal.status === "cancelled") return "Cancelled";
+  return "Draft proposal";
+}
+
+function getOperatorCommandCards(options: {
+  operatorNextAction: ReturnType<typeof getOperatorNextAction>;
+  operatorHealth: AppHealthSnapshotResult | null;
+  buildIntel: BuildIntelligenceSnapshot | null;
+  deployHealth: DeployHealthSnapshot | null;
+  latestRepoProposal: RepoActionProposalSummary | null;
+  latestRepoPrReady: boolean;
+  activeTaskCount: number;
+}): OperatorCommandCard[] {
+  const healthStatus = normalizeOperatorStatus(options.operatorHealth?.status);
+  const buildStatus = normalizeOperatorStatus(options.buildIntel?.github?.latestWorkflowRun?.conclusion ?? options.buildIntel?.github?.latestWorkflowRun?.status);
+  const deployStatus = normalizeOperatorStatus(options.deployHealth?.overall);
+  const proposalLabel = getProposalReadinessLabel(options.latestRepoProposal, options.latestRepoPrReady);
+  const nextActionLabel = options.operatorNextAction.actionLabel.toLowerCase();
+  const nextActionTarget: CabinetDrawerKey = nextActionLabel.includes("build")
+    ? "build"
+    : nextActionLabel.includes("health") || nextActionLabel.includes("deploy")
+      ? "health"
+      : nextActionLabel.includes("runner") || nextActionLabel.includes("jobs")
+        ? "tasks"
+        : "repo";
+
+  return [
+    {
+      key: "next",
+      eyebrow: "Best next move",
+      title: options.operatorNextAction.title,
+      detail: options.operatorNextAction.detail,
+      tone: options.operatorNextAction.tone,
+      actionLabel: options.operatorNextAction.actionLabel,
+      targetDrawer: nextActionTarget,
+    },
+    {
+      key: "proposal",
+      eyebrow: "Repo Control",
+      title: proposalLabel,
+      detail: options.latestRepoProposal?.title ?? "Draft a focused proposal before changing files, deployments, schemas, payments, or customer-facing systems.",
+      tone: options.latestRepoPrReady ? "ready" : normalizeOperatorStatus(options.latestRepoProposal?.status || "idle"),
+      actionLabel: options.latestRepoProposal ? "Review proposal" : "Draft proposal",
+      targetDrawer: "repo",
+    },
+    {
+      key: "health",
+      eyebrow: "Read-only health",
+      title: options.operatorHealth?.status ? `Health ${options.operatorHealth.status}` : "Run health snapshot",
+      detail: options.operatorHealth?.summary ?? "Load project health, integration visibility, and configuration signals without mutating production.",
+      tone: healthStatus,
+      actionLabel: "Open health",
+      targetDrawer: "health",
+    },
+    {
+      key: "build",
+      eyebrow: "Build signal",
+      title: options.buildIntel?.github?.latestWorkflowRun?.conclusion ?? options.buildIntel?.github?.latestWorkflowRun?.status ?? "Check build intelligence",
+      detail: options.buildIntel?.github?.latestCommit?.message?.split("\n")[0] ?? "Review recent GitHub workflow and commit visibility before new work.",
+      tone: buildStatus,
+      actionLabel: "Open build",
+      targetDrawer: "build",
+    },
+    {
+      key: "runner",
+      eyebrow: "Runner queue",
+      title: options.activeTaskCount ? `${options.activeTaskCount} active task${options.activeTaskCount === 1 ? "" : "s"}` : "Runner idle",
+      detail: options.activeTaskCount ? "Let active queued/running work finish before starting another execution path." : "No queued/running workspace tasks are loaded for this project.",
+      tone: options.activeTaskCount ? "warning" : deployStatus === "unknown" ? "idle" : deployStatus,
+      actionLabel: "Open tasks",
+      targetDrawer: "tasks",
+    },
+  ];
+}
+
 function buildArtifactDownloadHref(artifact: WorkspaceArtifactSummary | CodeExecutionArtifact) {
   return `data:${artifact.mimeType};charset=utf-8,${encodeURIComponent(artifact.content)}`;
 }
@@ -2286,6 +2377,15 @@ export function Chat() {
     latestRepoPrReady,
     activeTaskCount: activeOperatorTaskCount,
     operatorLastRefreshedAt,
+  });
+  const operatorCommandCards = getOperatorCommandCards({
+    operatorNextAction,
+    operatorHealth,
+    buildIntel,
+    deployHealth,
+    latestRepoProposal,
+    latestRepoPrReady,
+    activeTaskCount: activeOperatorTaskCount,
   });
   const operatorReadinessLabel = operatorHealth?.status
     ? operatorHealth.status.toUpperCase()
@@ -4017,7 +4117,7 @@ export function Chat() {
 
                 <article className="operator-control-tower-card" data-testid="operator-control-tower-card">
                   <div className="operator-control-tower-main">
-                    <span className="operator-card-label">Control Tower v2</span>
+                    <span className="operator-card-label">Control Tower v3</span>
                     <h4>{selectedProject.label}</h4>
                     <p>{selectedProject.repo}</p>
                     <div className="operator-control-tower-badges">
@@ -4033,6 +4133,28 @@ export function Chat() {
                     <small>{operatorNextAction.actionLabel}</small>
                   </div>
                 </article>
+
+                <div className="operator-command-grid" data-testid="operator-command-grid" aria-label="Operator Console v3 command actions">
+                  {operatorCommandCards.map((card) => (
+                    <button
+                      key={card.key}
+                      type="button"
+                      className={`operator-command-card operator-command-card--${normalizeOperatorStatus(card.tone)}`}
+                      onClick={() => setActiveCabinetDrawer(card.targetDrawer)}
+                    >
+                      <span>{card.eyebrow}</span>
+                      <strong>{card.title}</strong>
+                      <p>{card.detail}</p>
+                      <small>{card.actionLabel}</small>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="operator-proposal-badges" data-testid="operator-proposal-badges" aria-label="Operator proposal status badges">
+                  <span className={`operator-status-pill operator-status-pill--${latestRepoPrReady ? "ready" : normalizeOperatorStatus(latestRepoProposal?.status || "idle")}`}>{getProposalReadinessLabel(latestRepoProposal, latestRepoPrReady)}</span>
+                  <span className="project-safety-badge project-safety-badge--read-only">Proposal-only shortcuts</span>
+                  <span className="project-safety-badge project-safety-badge--read-only">No merge or deploy</span>
+                </div>
 
                 <div className="operator-signal-strip" aria-label="Operator signal summary">
                   <span><strong>{operatorSignalCount}/5</strong> signals loaded</span>
