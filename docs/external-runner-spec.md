@@ -306,3 +306,26 @@ The contract writes:
 ```
 
 v1.12 defines the signed owner preview token policy only. It records `tokenType: owner_preview_access`, `issuer: jarvis`, `audience: javier_only`, `strategy: jarvis_signed_owner_proxy`, `ttlSeconds: 900`, owner-session requirements, audit/revocation requirements, and required claims. It must not sign or generate tokens, create routes, create public/protected/raw provider URLs, run Vercel, deploy, merge code, mutate schemas, write env vars, change payments, or launch to customers. The next step remains blocked behind `APPROVE OWNER PREVIEW TOKEN ROUTE`.
+
+
+## Owner preview token route contract v1.13
+
+After v1.12 prepares the signed owner preview token contract, Jarvis may prepare the token route contract with:
+
+```txt
+npm run prepare-owner-preview-token-route -- --proposal-id=<uuid>
+```
+
+The route contract reads:
+
+```txt
+.jarvis/owner-preview-token-contracts/<proposal-id>.json
+```
+
+The route contract writes:
+
+```txt
+.jarvis/owner-preview-token-routes/<proposal-id>.json
+```
+
+v1.13 defines the route/interface contract only for `/api/owner-preview/token` with `POST`, owner authentication, short-lived token policy, audit requirements, revocation requirements, and hidden raw provider URL rules. It must not create an actual API route file, sign or generate tokens, create public/protected/raw provider URLs, run Vercel, deploy, merge code, mutate schemas, write env vars, change payments, or launch to customers. Actual route implementation remains blocked behind `APPROVE OWNER PREVIEW TOKEN ROUTE IMPLEMENTATION`.
