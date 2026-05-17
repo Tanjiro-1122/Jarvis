@@ -14,7 +14,8 @@ const ui = fs.readFileSync("components/chat.tsx", "utf8");
 
 const plannerStart = lib.indexOf("export type SessionFragmentMergePlanResult");
 assert(plannerStart > 0, "merge planner result type exists");
-const planner = lib.slice(plannerStart);
+const executorStart = lib.indexOf("export type SessionFragmentMergeExecutionResult");
+const planner = lib.slice(plannerStart, executorStart > plannerStart ? executorStart : undefined);
 
 assert(planner.includes("planJarvisSessionFragmentMerge"), "merge planner function exists");
 assert(planner.includes("dryRun: true"), "planner is explicitly dry-run");
@@ -33,7 +34,8 @@ assert(chat.includes("plan_jarvis_fragmented_session_merge"), "chat exposes merg
 assert(chat.includes("execute: async () => planJarvisSessionFragmentMerge()"), "chat tool calls planner only");
 assert(chat.includes("must never imply it executed the merge"), "system prompt blocks merge execution claims");
 assert(chat.includes("or implemented a merge executor"), "system prompt blocks executor claims");
-assert(!chat.includes("execute_jarvis_session_merge"), "no merge executor tool exists");
+assert(chat.includes("execute_jarvis_session_merge"), "approved merge executor tool exists separately from planner");
+assert(chat.includes("approvalPhrase: z.string"), "separate executor requires explicit approval phrase");
 
 assert(ui.includes("SessionFragmentMergePlanCard"), "merge planner UI card exists");
 assert(ui.includes("planner-only dry run"), "UI shows planner-only mode");

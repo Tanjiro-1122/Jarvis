@@ -53,6 +53,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_app_health_snapshot: "Checking app health",
   audit_jarvis_session_fragments: "Auditing saved session fragments",
   plan_jarvis_fragmented_session_merge: "Planning session merge dry-run",
+  execute_jarvis_session_merge: "Executing approved session merge",
   commitChangesDirectly: "Writing approved code changes",
 };
 
@@ -551,6 +552,69 @@ function SessionFragmentMergePlanCard({ state, result }: { state: ToolInvocation
         {result?.approvalRequired?.reason && <p className="build-intel-copy">{result.approvalRequired.reason}</p>}
         {result?.nextStep && <div className="repo-flow-next"><strong>Next:</strong> {result.nextStep}</div>}
         <div className="repo-flow-boundary">Safety: planner only · no merge/update/delete/insert/upsert/RPC/schema changes</div>
+      </div>
+    </div>
+  );
+}
+
+
+type SessionFragmentMergeExecutionResult = {
+  success?: boolean;
+  executed?: boolean;
+  ownerSessionId?: string;
+  generatedAt?: string;
+  summary?: string;
+  requiredApprovalPhrase?: string;
+  sourceSessionIds?: string[];
+  mutations?: {
+    conversationsReassigned?: number;
+    workspacesReassigned?: number;
+    workspaceMembershipsAttached?: number;
+    workspaceEventsReassigned?: number;
+    messageRowsUpdated?: number;
+    messageContentRead?: boolean;
+    deletesPerformed?: number;
+    schemaMutationsPerformed?: number;
+  };
+  after?: SessionFragmentAuditResult;
+  safeBoundaries?: string[];
+  error?: string;
+};
+
+function SessionFragmentMergeExecutionCard({ state, result }: { state: ToolInvocation["state"]; result?: SessionFragmentMergeExecutionResult }) {
+  const isPending = state === "partial-call" || state === "call";
+  const failed = !isPending && result?.success === false;
+  const mutation = result?.mutations;
+
+  return (
+    <div className={`tool-card tool-card--app-health ${isPending ? "tool-card--pending" : ""} ${failed ? "tool-card--failed" : ""}`}>
+      <div className="tool-card-header">
+        <span className="tool-card-icon">{isPending ? "🔐" : failed ? "🚧" : result?.executed ? "✅" : "🟢"}</span>
+        <span className="tool-card-title">Jarvis approved session merge</span>
+        {isPending && <span className="tool-spinner" />}
+      </div>
+      <div className="tool-card-body tool-card-body--stacked">
+        <span className="repo-control-meta">Mode: approved metadata merge · no message row edits</span>
+        <span className={failed ? "repo-control-status repo-control-status--warning" : "repo-control-status repo-control-status--safe"}>
+          {isPending ? "Checking approval gate" : failed ? "Merge blocked" : result?.executed ? "Merge executed" : "Nothing to merge"}
+        </span>
+        {result?.summary && <p className="build-intel-copy">{result.summary}</p>}
+        {mutation && (
+          <div className="memory-meta-row">
+            <span>Chats moved: {mutation.conversationsReassigned ?? 0}</span>
+            <span>Workspaces: {mutation.workspacesReassigned ?? 0}</span>
+            <span>Memberships: {mutation.workspaceMembershipsAttached ?? 0}</span>
+            <span>Msg edits: {mutation.messageRowsUpdated ?? 0}</span>
+          </div>
+        )}
+        {result?.after?.totals && (
+          <div className="memory-meta-row">
+            <span>Remaining fragments: {result.after.totals.fragmentedSessions ?? 0}</span>
+            <span>Total chats: {result.after.totals.conversations ?? 0}</span>
+            <span>Total msgs: {result.after.totals.messages ?? 0}</span>
+          </div>
+        )}
+        <div className="repo-flow-boundary">Safety: exact approval only · no message content/message row edits/deletes/schema changes</div>
       </div>
     </div>
   );
@@ -1786,6 +1850,16 @@ function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
       <SessionFragmentMergePlanCard
         state={invocation.state}
         result={invocation.state === "result" ? (invocation.result as SessionFragmentMergePlanResult) : undefined}
+      />
+    );
+  }
+
+
+  if (invocation.toolName === "execute_jarvis_session_merge") {
+    return (
+      <SessionFragmentMergeExecutionCard
+        state={invocation.state}
+        result={invocation.state === "result" ? (invocation.result as SessionFragmentMergeExecutionResult) : undefined}
       />
     );
   }

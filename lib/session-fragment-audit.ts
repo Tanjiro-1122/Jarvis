@@ -318,3 +318,208 @@ export async function planJarvisSessionFragmentMerge(): Promise<SessionFragmentM
       : "No merge executor is needed unless new fragments appear later.",
   };
 }
+
+
+export type SessionFragmentMergeExecutionResult = {
+  success: boolean;
+  executed: boolean;
+  ownerSessionId: string;
+  generatedAt: string;
+  summary: string;
+  requiredApprovalPhrase: "APPROVE JARVIS SESSION MERGE";
+  sourceSessionIds: string[];
+  before?: SessionFragmentMergePlanResult;
+  after?: SessionFragmentAuditResult;
+  mutations: {
+    conversationsReassigned: number;
+    workspacesReassigned: number;
+    workspaceMembershipsAttached: number;
+    workspaceEventsReassigned: number;
+    messageRowsUpdated: 0;
+    messageContentRead: false;
+    deletesPerformed: 0;
+    schemaMutationsPerformed: 0;
+  };
+  safeBoundaries: string[];
+  error?: string;
+};
+
+function blockedMergeExecution(error: string, sourceSessionIds: string[] = []): SessionFragmentMergeExecutionResult {
+  return {
+    success: false,
+    executed: false,
+    ownerSessionId: JARVIS_OWNER_SESSION_ID,
+    generatedAt: new Date().toISOString(),
+    summary: error,
+    requiredApprovalPhrase: "APPROVE JARVIS SESSION MERGE",
+    sourceSessionIds,
+    mutations: {
+      conversationsReassigned: 0,
+      workspacesReassigned: 0,
+      workspaceMembershipsAttached: 0,
+      workspaceEventsReassigned: 0,
+      messageRowsUpdated: 0,
+      messageContentRead: false,
+      deletesPerformed: 0,
+      schemaMutationsPerformed: 0,
+    },
+    safeBoundaries: [
+      "Exact approval phrase required before any mutation.",
+      "No message content is selected or returned.",
+      "No message rows are updated.",
+      "No rows are deleted.",
+      "No schema changes are performed.",
+    ],
+    error,
+  };
+}
+
+/**
+ * Executes the approved Jarvis session metadata merge.
+ *
+ * Scope is intentionally narrow:
+ * - reassign conversation.session_id to owner:javier
+ * - reassign workspace.session_id to owner:javier
+ * - add owner workspace memberships for those workspaces
+ * - reassign workspace_events.session_id to owner:javier
+ *
+ * It never reads message content, never updates message rows, never deletes
+ * rows, and never changes schema.
+ */
+export async function executeJarvisSessionFragmentMerge(approvalPhrase: string): Promise<SessionFragmentMergeExecutionResult> {
+  if (approvalPhrase !== "APPROVE JARVIS SESSION MERGE") {
+    return blockedMergeExecution("Blocked: exact approval phrase was not provided.");
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return blockedMergeExecution("Supabase is not configured, so Jarvis cannot execute the session merge.");
+  }
+
+  const before = await planJarvisSessionFragmentMerge();
+  if (!before.success) {
+    return { ...blockedMergeExecution(before.error ?? before.summary, before.sourceSessionIds), before };
+  }
+
+  const sourceSessionIds = before.sourceSessionIds.filter((sessionId) => sessionId && sessionId !== JARVIS_OWNER_SESSION_ID);
+  if (sourceSessionIds.length === 0) {
+    const after = await auditJarvisSessionFragments();
+    return {
+      success: true,
+      executed: false,
+      ownerSessionId: JARVIS_OWNER_SESSION_ID,
+      generatedAt: new Date().toISOString(),
+      summary: "No fragmented sessions needed merging.",
+      requiredApprovalPhrase: "APPROVE JARVIS SESSION MERGE",
+      sourceSessionIds: [],
+      before,
+      after,
+      mutations: {
+        conversationsReassigned: 0,
+        workspacesReassigned: 0,
+        workspaceMembershipsAttached: 0,
+        workspaceEventsReassigned: 0,
+        messageRowsUpdated: 0,
+        messageContentRead: false,
+        deletesPerformed: 0,
+        schemaMutationsPerformed: 0,
+      },
+      safeBoundaries: [
+        "No fragmented sessions were present.",
+        "No message content was selected or returned.",
+        "No message rows were updated.",
+        "No rows were deleted.",
+        "No schema changes were performed.",
+      ],
+    };
+  }
+
+  const workspaceLookup = await supabase
+    .from("workspaces")
+    .select("id, session_id")
+    .in("session_id", sourceSessionIds);
+  if (workspaceLookup.error) {
+    return { ...blockedMergeExecution(`Workspace lookup failed: ${workspaceLookup.error.message}`, sourceSessionIds), before };
+  }
+
+  const workspaceIds = Array.from(new Set((workspaceLookup.data ?? []).map((workspace) => workspace.id).filter(Boolean)));
+
+  let workspaceMembershipsAttached = 0;
+  if (workspaceIds.length > 0) {
+    const membershipRows = workspaceIds.map((workspaceId) => ({
+      workspace_id: workspaceId,
+      session_id: JARVIS_OWNER_SESSION_ID,
+      role: "owner",
+    }));
+    const membershipResponse = await supabase
+      .from("workspace_memberships")
+      .upsert(membershipRows, { onConflict: "workspace_id,session_id" })
+      .select("workspace_id");
+    if (membershipResponse.error) {
+      return { ...blockedMergeExecution(`Owner workspace membership attach failed: ${membershipResponse.error.message}`, sourceSessionIds), before };
+    }
+    workspaceMembershipsAttached = membershipResponse.data?.length ?? workspaceIds.length;
+  }
+
+  const conversationUpdate = await supabase
+    .from("conversations")
+    .update({ session_id: JARVIS_OWNER_SESSION_ID })
+    .in("session_id", sourceSessionIds)
+    .select("id");
+  if (conversationUpdate.error) {
+    return { ...blockedMergeExecution(`Conversation reassignment failed: ${conversationUpdate.error.message}`, sourceSessionIds), before };
+  }
+
+  const workspaceUpdate = await supabase
+    .from("workspaces")
+    .update({ session_id: JARVIS_OWNER_SESSION_ID })
+    .in("session_id", sourceSessionIds)
+    .select("id");
+  if (workspaceUpdate.error) {
+    return { ...blockedMergeExecution(`Workspace reassignment failed: ${workspaceUpdate.error.message}`, sourceSessionIds), before };
+  }
+
+  const eventUpdate = await supabase
+    .from("workspace_events")
+    .update({ session_id: JARVIS_OWNER_SESSION_ID })
+    .in("session_id", sourceSessionIds)
+    .select("id");
+  if (eventUpdate.error) {
+    return { ...blockedMergeExecution(`Workspace event reassignment failed: ${eventUpdate.error.message}`, sourceSessionIds), before };
+  }
+
+  const after = await auditJarvisSessionFragments();
+  const conversationsReassigned = conversationUpdate.data?.length ?? before.proposedChanges.conversationsToReassign;
+  const workspacesReassigned = workspaceUpdate.data?.length ?? before.proposedChanges.workspaceOwnersToNormalize;
+  const workspaceEventsReassigned = eventUpdate.data?.length ?? 0;
+
+  return {
+    success: true,
+    executed: true,
+    ownerSessionId: JARVIS_OWNER_SESSION_ID,
+    generatedAt: new Date().toISOString(),
+    summary: `Approved metadata merge executed: ${conversationsReassigned} conversation${conversationsReassigned === 1 ? "" : "s"} and ${workspacesReassigned} workspace${workspacesReassigned === 1 ? "" : "s"} were reassigned to ${JARVIS_OWNER_SESSION_ID}. Message rows were not edited.`,
+    requiredApprovalPhrase: "APPROVE JARVIS SESSION MERGE",
+    sourceSessionIds,
+    before,
+    after,
+    mutations: {
+      conversationsReassigned,
+      workspacesReassigned,
+      workspaceMembershipsAttached,
+      workspaceEventsReassigned,
+      messageRowsUpdated: 0,
+      messageContentRead: false,
+      deletesPerformed: 0,
+      schemaMutationsPerformed: 0,
+    },
+    safeBoundaries: [
+      "Executed only after exact approval phrase matched.",
+      "Only session ownership metadata was updated.",
+      "No message content was selected or returned.",
+      "No message rows were updated.",
+      "No rows were deleted.",
+      "No schema changes were performed.",
+    ],
+  };
+}
