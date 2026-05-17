@@ -3969,6 +3969,12 @@ export function Chat() {
               ))}
             </div>
 
+            {isMobileToolsMode && (
+              <div className="mobile-tools-scroll-hint" aria-hidden="true">
+                <span>Scroll for drawer details</span>
+              </div>
+            )}
+
             <div ref={mobileActiveDrawerRef} className={filingCabinetActiveLabelClassName} data-testid="mobile-tools-active-drawer-anchor">
               <div>
                 <span>Open drawer</span>
