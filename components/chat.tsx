@@ -109,6 +109,15 @@ function getToolDisplayLabel(name: string, args?: Record<string, unknown>, resul
   return TOOL_LABELS[name] ?? `Running ${humanizeToolName(name)}`;
 }
 
+const LONG_FORM_DIAGNOSTIC_TOOLS = new Set([
+  "get_jarvis_self_audit_snapshot",
+  "get_jarvis_capability_snapshot",
+]);
+
+function isLongFormDiagnosticTool(name: string) {
+  return LONG_FORM_DIAGNOSTIC_TOOLS.has(name);
+}
+
 const EXECUTION_FAILURE_LABELS: Record<string, string> = {
   disabled: "Execution disabled in deployment",
   empty_snippet: "No executable snippet provided",
@@ -2033,9 +2042,16 @@ function GithubActivityCard({
   );
 }
 
-function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
+function ToolCallCard({
+  invocation,
+  assistantHasText = false,
+}: {
+  invocation: ToolInvocation;
+  assistantHasText?: boolean;
+}) {
   const isPending =
     invocation.state === "partial-call" || invocation.state === "call";
+  const showAnswerFollows = isPending && assistantHasText && isLongFormDiagnosticTool(invocation.toolName);
 
   if (
     invocation.toolName === "create_task_plan" &&
@@ -2255,14 +2271,21 @@ function ToolCallCard({ invocation }: { invocation: ToolInvocation }) {
     );
   }
 
+  const label = getToolDisplayLabel(invocation.toolName, invocation.args as Record<string, unknown>);
+
   // Generic fallback card
   return (
-    <div className={`tool-card ${isPending ? "tool-card--pending" : ""}`}>
+    <div className={`tool-card ${isPending ? "tool-card--pending" : ""} ${showAnswerFollows ? "tool-card--answer-follows" : ""}`}>
       <div className="tool-card-header">
-        <span className="tool-card-icon">{isPending ? "⚙️" : "✅"}</span>
-        <span className="tool-card-title">{getToolDisplayLabel(invocation.toolName, invocation.args as Record<string, unknown>)}</span>
-        {isPending && <span className="tool-spinner" />}
+        <span className="tool-card-icon">{showAnswerFollows ? "✅" : isPending ? "⚙️" : "✅"}</span>
+        <span className="tool-card-title">{showAnswerFollows ? `${label} — answer follows` : label}</span>
+        {isPending && !showAnswerFollows && <span className="tool-spinner" />}
       </div>
+      {showAnswerFollows && (
+        <div className="tool-card-body">
+          <p className="tool-card-note">Jarvis finished the diagnostic tool call and is summarizing the result below.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -3972,6 +3995,7 @@ export function Chat() {
                         <ToolCallCard
                           key={`${message.id}-${index}`}
                           invocation={invocation}
+                          assistantHasText={Boolean(messageText.trim())}
                         />
                       );
                     }
