@@ -1451,7 +1451,7 @@ export function Chat() {
           project_key: memoryProjectKey,
           tags: [memoryProjectKey, editingMemoryId ? "edited" : "manual"].filter(Boolean),
           priority: memoryKind === "rule" || memoryKind === "safety" ? 9 : 6,
-          source: editingMemoryId ? "jarvis_ui_edit" : "jarvis_ui",
+          source: editingMemoryId ? "rune_ui_edit" : "rune_ui",
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
@@ -1553,7 +1553,7 @@ export function Chat() {
         body: JSON.stringify({
           mode,
           approved: mode === "import" ? memoryImportApproved : false,
-          source: "jarvis_ui_curated_import",
+          source: "rune_ui_curated_import",
           items,
         }),
       });
