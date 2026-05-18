@@ -1767,16 +1767,17 @@ export function Chat() {
   // Uses container scrollTop so it works reliably in overflow containers.
   const userIsNearBottomRef = useRef(true);
   useEffect(() => {
-    const container = messagesContainerRef.current;
+    const container: HTMLDivElement | null = messagesContainerRef.current;
     if (!container) return;
+    const el = container;
     // Track whether user has manually scrolled up
     function onScroll() {
       const threshold = 120;
       userIsNearBottomRef.current =
-        container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+        el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
     }
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => container.removeEventListener("scroll", onScroll);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
