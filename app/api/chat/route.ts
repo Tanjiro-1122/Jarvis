@@ -1,5 +1,6 @@
 import { streamText, UIMessage, convertToCoreMessages, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { proposeAction, approveProposal, listHandsProposals } from "@/lib/hands";
 import { Octokit } from "@octokit/rest";
 import { z } from "zod";
 import {
@@ -1656,6 +1657,48 @@ function getAgentTools({
         };
       },
     }),
+
+
+    proposeHandsAction: tool({
+      description:
+        "Propose a sensitive action (code change, deploy, PR, merge, schema change, " +
+        "customer message, financial action). ALWAYS call this before executing any " +
+        "sensitive action. Returns a proposal with a gate phrase Javier must send to approve.",
+      parameters: z.object({
+        actionType: z.enum(["code_change","deploy","pr_open","pr_merge","branch_create","schema_change","customer_message","grant_credits","financial","revoke_access","other_sensitive"]),
+        title: z.string(),
+        findings: z.string(),
+        plan: z.string(),
+        riskLevel: z.enum(["low","medium","high"]).optional(),
+        projectKey: z.string().optional(),
+        rollbackNote: z.string().optional(),
+      }),
+      execute: async ({ actionType, title, findings, plan, riskLevel, projectKey, rollbackNote }) => {
+        const result = await proposeAction({ actionType, title, findings, plan, riskLevel, projectKey, rollbackNote, sessionId: sessionId ?? null, workspaceId: workspaceId ?? null, conversationId: conversationId ?? null });
+        if (!result.ok) return { error: result.error };
+        return { proposalId: result.proposal!.id, gatePhrase: result.proposal!.gate_phrase, status: "proposed" };
+      },
+    }),
+
+    approveHandsAction: tool({
+      description: "Approve a Hands proposal after Javier sends the gate phrase.",
+      parameters: z.object({ proposalId: z.string() }),
+      execute: async ({ proposalId }) => {
+        const result = await approveProposal(proposalId);
+        if (!result.ok) return { error: result.error };
+        return { proposalId, status: "approved", title: result.proposal!.title };
+      },
+    }),
+
+    listHandsProposalsAction: tool({
+      description: "List recent Hands proposals and their status.",
+      parameters: z.object({ limit: z.number().optional() }),
+      execute: async ({ limit }) => {
+        const proposals = await listHandsProposals(limit ?? 10);
+        return proposals.map((p) => ({ id: p.id, title: p.title, status: p.status, gatePhrase: p.gate_phrase, resultSummary: p.result_summary }));
+      },
+    }),
+
 
 
     prepare_repo_deployment_handoff: tool({
