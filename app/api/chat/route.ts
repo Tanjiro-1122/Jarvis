@@ -82,6 +82,7 @@ import { streamText, UIMessage, convertToCoreMessages, tool }
         },
  from "ai";
 import { openai } from "@ai-sdk/openai";
+import { proposeAction, approveProposal, getHandsProposal, listHandsProposals } from "@/lib/hands";
 import { Octokit } from "@octokit/rest";
 import { z } from "zod";
 import {
