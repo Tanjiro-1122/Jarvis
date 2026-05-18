@@ -203,7 +203,7 @@ function buildLocalBootstrap(sessionId: string): WorkspaceBootstrapData {
     persistenceEnabled: false,
     schemaReady: true,
     notice:
-      "Supabase workspace persistence is not configured, so Jarvis is running in a single local workspace. Add the Supabase variables and schema from the README to unlock persistent projects, files, and artifacts.",
+      "Supabase workspace persistence is not configured, so Rune is running in a single local workspace. Add the Supabase variables and schema from the README to unlock persistent projects, files, and artifacts.",
     workspaces: [
       {
         id: workspaceId,
