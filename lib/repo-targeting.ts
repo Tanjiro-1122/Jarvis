@@ -37,10 +37,10 @@ export function inferRepoActionTargets(input: {
     inferProjectFromText(requestText);
   const repo = resolveCanonicalRepo(input.repo || inferredProject?.repo || RUNE_DEFAULT_REPO, requestText);
   const project = getProjectByRepo(repo) || inferredProject;
-  const projectKey = project?.key || input.projectKey || "jarvis";
+  const projectKey = project?.key || input.projectKey || "rune";
   const files: RepoActionFileTarget[] = [...(input.files || [])];
 
-  if (projectKey === "jarvis") {
+  if (projectKey === "rune") {
     if (hasAny(requestText, [/router|routing|intent|self[- ]?audit|capabilit|calculator|calculate/])) {
       pushUnique(files, { path: "lib/orchestration.ts", operation: "inspect", note: "Routing, intent detection, and planner behavior." });
       pushUnique(files, { path: "app/api/chat/route.ts", operation: "inspect", note: "Chat tools, prompt, and execution route." });

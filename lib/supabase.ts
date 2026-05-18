@@ -3,7 +3,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 /**
  * Returns a fresh Supabase client for each server-side call.
  *
- * Jarvis manages authentication with its own password/session cookie, so all
+ * Rune manages authentication with its own password/session cookie, so all
  * Supabase access happens from trusted Next.js server routes. Prefer the
  * service-role key when it is available so private workspace writes are not
  * blocked by Supabase row-level security. Fall back to the anon key only for
