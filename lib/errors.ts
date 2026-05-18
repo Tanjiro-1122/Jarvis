@@ -3,7 +3,7 @@
  * Provides consistent error handling across API routes and services.
  */
 
-export type JarvisErrorCode =
+export type RuneErrorCode =
   | "VALIDATION_ERROR"
   | "PERSISTENCE_ERROR"
   | "EXECUTION_ERROR"
@@ -14,19 +14,19 @@ export type JarvisErrorCode =
   | "UPSTREAM_ERROR"
   | "UNKNOWN_ERROR";
 
-export class JarvisError extends Error {
-  readonly code: JarvisErrorCode;
+export class RuneError extends Error {
+  readonly code: RuneErrorCode;
   readonly statusCode: number;
   readonly cause?: unknown;
 
   constructor(
     message: string,
-    code: JarvisErrorCode = "UNKNOWN_ERROR",
+    code: RuneErrorCode = "UNKNOWN_ERROR",
     statusCode = 500,
     cause?: unknown
   ) {
     super(message);
-    this.name = "JarvisError";
+    this.name = "RuneError";
     this.code = code;
     this.statusCode = statusCode;
     this.cause = cause;
@@ -38,7 +38,7 @@ export function safeErrorMessage(
   err: unknown,
   fallback = "An unexpected error occurred."
 ): string {
-  if (err instanceof JarvisError) return err.message;
+  if (err instanceof RuneError) return err.message;
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   return fallback;
@@ -47,7 +47,7 @@ export function safeErrorMessage(
 /** Log an error with structured context to stderr. */
 export function logError(context: string, err: unknown): void {
   const msg = safeErrorMessage(err);
-  const code = err instanceof JarvisError ? err.code : "UNKNOWN_ERROR";
+  const code = err instanceof RuneError ? err.code : "UNKNOWN_ERROR";
   const extra =
     err instanceof Error && err.cause != null
       ? { cause: String(err.cause) }
