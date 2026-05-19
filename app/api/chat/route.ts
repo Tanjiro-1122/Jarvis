@@ -2205,13 +2205,39 @@ export async function POST(req: Request) {
       });
     }
 
-    const retrievalHits = await getWorkspaceRetrievalContext({
-      workspaceId,
-      query: latestUserText,
-    });
+    // ── Parallel pre-flight: retrieval + memory + attachments ──────────────────
+    // Run all three concurrently instead of serially to cut pre-stream latency.
+    // Each has a hard timeout so a slow Supabase round-trip never blocks the
+    // stream from starting.
+    function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+      return Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+      ]);
+    }
+
+    const inferredMemoryProject = inferProjectFromText(latestUserText);
+    const memoryProjectKey = inferredMemoryProject?.key ?? (workspaceId ? "rune" : null);
+
+    const [retrievalHits, supabaseMemorySection] = await Promise.all([
+      withTimeout(
+        getWorkspaceRetrievalContext({ workspaceId, query: latestUserText }),
+        3000,
+        [] as Awaited<ReturnType<typeof getWorkspaceRetrievalContext>>
+      ),
+      withTimeout(
+        buildSupabaseMemorySection({ query: latestUserText, projectKey: memoryProjectKey }),
+        3000,
+        ""
+      ),
+    ]);
+
+    // Fire-and-forget: don't block stream start on attachment persistence
+    void persistWorkspaceAttachments({ workspaceId, conversationId, attachments: latestAttachments })
+      .catch((e) => logError("chat.persistAttachments", e));
 
     if (taskId) {
-      await updateWorkspaceTaskStep({
+      void updateWorkspaceTaskStep({
         taskId,
         stepKey: "retrieve_workspace_context",
         status: "completed",
@@ -2220,7 +2246,7 @@ export async function POST(req: Request) {
           : "No strong retrieval hits; continuing with direct user context.",
         progress: 36,
       });
-      await updateWorkspaceTaskStep({
+      void updateWorkspaceTaskStep({
         taskId,
         stepKey: "execute_plan",
         status: "running",
@@ -2243,24 +2269,12 @@ ${retrievalHits
       : `## Retrieved Workspace Context
 - No highly relevant indexed workspace context matched this request. If the user uploads documents or generates artifacts in this workspace, those items should become part of future retrieval.`;
 
-    await persistWorkspaceAttachments({
-      workspaceId,
-      conversationId,
-      attachments: latestAttachments,
-    });
-
     const agentTools = getAgentTools({ workspaceId, conversationId });
 
     // Allow the chat model to be overridden via environment variable so the
     // deployment can switch to a newer or cheaper model without a code change.
     const CHAT_MODEL = process.env.RUNE_CHAT_MODEL ?? "gpt-4o";
     const ownerMemorySection = getOwnerMemorySection();
-    const inferredMemoryProject = inferProjectFromText(latestUserText);
-    const memoryProjectKey = inferredMemoryProject?.key ?? (workspaceId ? "rune" : null);
-    const supabaseMemorySection = await buildSupabaseMemorySection({
-      query: latestUserText,
-      projectKey: memoryProjectKey,
-    });
     const memoryRoutingSection = `## Memory Routing
 - Latest inferred project memory scope: ${memoryProjectKey ?? "global/all"}
 - If the request mentions a known project, prefer memories for that project plus global rules.
@@ -2421,7 +2435,7 @@ ${plannerOutput.steps
       messages: convertToCoreMessages(formattedMessages as unknown as UIMessage[]),
       tools: agentTools,
       toolChoice: forcedToolChoice ?? "auto",
-      maxSteps: 5,
+      maxSteps: 8, // increased: complex tool chains (self-audit, lifecycle, repo scan) need more steps
       onFinish: async ({ text }) => {
         if (!lastUserMessage) return;
 
