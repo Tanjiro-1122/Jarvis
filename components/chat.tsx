@@ -67,8 +67,8 @@ const ACCEPTED_TYPES = [
   "text/markdown",
 ];
 
-const STREAM_FINALIZATION_RECOVERY_MS = 12_000;
-const STREAM_STALL_WATCHDOG_MS = 18_000;
+const STREAM_FINALIZATION_RECOVERY_MS = 20_000; // extended: finalization needs more time
+const STREAM_STALL_WATCHDOG_MS = 30_000; // extended: tool chains can take up to 30s
 const STREAM_STALL_SECONDARY_RECOVERY_MS = 10_000;
 
 function getAssistantTextFromMessage(message: { role?: string; content?: unknown; parts?: Array<{ type?: string; text?: string }> } | undefined) {
@@ -1841,8 +1841,8 @@ export function Chat() {
     try {
       setStreamRecoveryNotice(
         reason === "watchdog"
-          ? "Checking for completed answer…"
-          : "Response stalled. I refreshed saved chat state so you can continue."
+          ? "Response stalled — click Send to try again"
+          : "Response stalled — chat is ready. Type your message to continue."
       );
       await Promise.all([
         loadConversation(sessionId, workspaceId, conversationId),
@@ -2102,6 +2102,7 @@ export function Chat() {
           const res = await fetch("/api/upload", {
             method: "POST",
             body: formData,
+            credentials: "include",
           });
 
           if (!res.ok) {
@@ -2136,6 +2137,7 @@ export function Chat() {
     const response = await fetch("/api/upload", {
       method: "POST",
       body: formData,
+      credentials: "include",
     });
 
     const payload = await response.json().catch(() => ({})) as {
