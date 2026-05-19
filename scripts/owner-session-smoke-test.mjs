@@ -23,9 +23,9 @@ const routes = [
   "app/api/repo-actions/route.ts",
 ];
 
-assert(helper.includes('JARVIS_OWNER_SESSION_ID = "owner:javier"'), "stable Javier owner session id exists");
+assert(helper.includes('RUNE_OWNER_SESSION_ID = "owner:javier"'), "stable Javier owner session id exists");
 assert(helper.includes("verifySessionCookie"), "owner session resolver verifies signed Jarvis cookie");
-assert(helper.includes("return JARVIS_OWNER_SESSION_ID"), "authenticated requests ignore browser-local IDs");
+assert(helper.includes("return RUNE_OWNER_SESSION_ID"), "authenticated requests ignore browser-local IDs");
 assert(helper.includes("clientSessionId"), "local/dev fallback still accepts client session id");
 assert(helper.includes("Request | NextRequest"), "resolver supports both NextRequest routes and standard chat Request");
 
