@@ -1,9 +1,9 @@
 import { getDeployHealthSnapshot, type DeployHealthSnapshot } from "@/lib/deploy-health";
 import {
-  JARVIS_APPROVAL_REQUIRED_ACTIONS,
+  RUNE_APPROVAL_REQUIRED_ACTIONS,
   RUNE_CANONICAL_PROJECTS,
-  JARVIS_NOT_CONNECTED_YET,
-  JARVIS_REAL_CAPABILITIES,
+  RUNE_NOT_CONNECTED_YET,
+  RUNE_REAL_CAPABILITIES,
 } from "@/lib/project-registry";
 import { logError } from "@/lib/errors";
 
@@ -115,7 +115,7 @@ export async function getCapabilityTruthSnapshot(): Promise<CapabilityTruthSnaps
   const buckets = emptyBuckets();
   const generatedAt = new Date().toISOString();
 
-  for (const capability of JARVIS_REAL_CAPABILITIES) {
+  for (const capability of RUNE_REAL_CAPABILITIES) {
     push(buckets, item(`real.${capability.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, capability, "verified", "Implemented in the Rune codebase."));
   }
 
@@ -208,11 +208,11 @@ export async function getCapabilityTruthSnapshot(): Promise<CapabilityTruthSnaps
     )
   );
 
-  for (const capability of JARVIS_NOT_CONNECTED_YET) {
+  for (const capability of RUNE_NOT_CONNECTED_YET) {
     push(buckets, item(`missing.${capability.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, capability, "not_connected", "Not wired as a real integration yet. Do not claim this is available."));
   }
 
-  for (const action of JARVIS_APPROVAL_REQUIRED_ACTIONS) {
+  for (const action of RUNE_APPROVAL_REQUIRED_ACTIONS) {
     push(buckets, item(`approval.${action.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, action, "requires_approval", "Requires explicit Javier approval before execution."));
   }
 
