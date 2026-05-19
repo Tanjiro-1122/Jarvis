@@ -62,7 +62,7 @@ export const RUNE_CANONICAL_PROJECTS: RuneProject[] = [
 
 export const RUNE_DEFAULT_REPO = "Tanjiro-1122/Rune";
 
-export const JARVIS_APPROVAL_REQUIRED_ACTIONS = [
+export const RUNE_APPROVAL_REQUIRED_ACTIONS = [
   "changing production code",
   "committing code",
   "opening pull requests",
@@ -73,9 +73,9 @@ export const JARVIS_APPROVAL_REQUIRED_ACTIONS = [
   "performing banking actions",
 ] as const;
 
-export const JARVIS_REAL_CAPABILITIES = [
+export const RUNE_REAL_CAPABILITIES = [
   "Supabase-backed memory and memory events",
-  "Project switchboard for Jarvis, Unfiltr, SWH, and Unfiltr Family",
+  "Project switchboard for Rune, Unfiltr, SWH, and Unfiltr Family",
   "Repo Control proposal workflow",
   "Build Intelligence snapshots when GitHub/Vercel env vars are configured",
   "Deploy Health diagnostics without exposing secrets",
@@ -84,7 +84,7 @@ export const JARVIS_REAL_CAPABILITIES = [
   "GitHub repository inspection with configured GitHub token or public access",
 ] as const;
 
-export const JARVIS_NOT_CONNECTED_YET = [
+export const RUNE_NOT_CONNECTED_YET = [
   "Banking actions or Bank of America integration",
   "Email sending/customer support inbox automation",
   "RevenueCat direct admin/granting controls",
@@ -160,5 +160,5 @@ export function buildProjectRegistryPromptSection() {
       `- ${project.label}: repo \`${project.repo}\`; ${project.description} Safety: ${project.safetyLevel}. Platforms: ${project.platforms.length ? project.platforms.join(", ") : "unknown"}.`
   ).join("\n");
 
-  return `## Canonical Project Registry\n${projectLines}\n\n## Brain Grounding Rules\n- If Javier asks about "your repo", "your own repo", "Jarvis code", "this app", or "read yourself", use \`${RUNE_DEFAULT_REPO}\`. Never guess \`javierhuertas/jarvis\` or invent owner/repo names.\n- If Javier mentions Unfiltr, use \`Tanjiro-1122/UniltrbyJavierbackup\`.\n- If Javier mentions SWH or SportsWager Helper, use \`Tanjiro-1122/swhmobile\`.\n- If Javier mentions Unfiltr Family or elderly-care companion, use \`Tanjiro-1122/UnfiltrFamily\`.\n- Unfiltr is iOS-only — never expect Google Play credentials for Unfiltr.\n- If the requested project is not in this registry, ask for the repo slug instead of guessing.\n- Be capability-accurate: separate what is verified, partially wired, requires env/schema setup, and not connected yet.\n\n## Real Capability Snapshot\nCurrently real/wired foundations:\n${JARVIS_REAL_CAPABILITIES.map((item) => `- ${item}`).join("\n")}\n\nNot connected yet:\n${JARVIS_NOT_CONNECTED_YET.map((item) => `- ${item}`).join("\n")}\n\nActions requiring explicit Javier approval before execution:\n${JARVIS_APPROVAL_REQUIRED_ACTIONS.map((item) => `- ${item}`).join("\n")}`;
+  return `## Canonical Project Registry\n${projectLines}\n\n## Brain Grounding Rules\n- If Javier asks about "your repo", "your own repo", "Rune code", "this app", or "read yourself", use \`${RUNE_DEFAULT_REPO}\`. Never guess \`javierhuertas/jarvis\` or invent owner/repo names.\n- If Javier mentions Unfiltr, use \`Tanjiro-1122/UniltrbyJavierbackup\`.\n- If Javier mentions SWH or SportsWager Helper, use \`Tanjiro-1122/swhmobile\`.\n- If Javier mentions Unfiltr Family or elderly-care companion, use \`Tanjiro-1122/UnfiltrFamily\`.\n- Unfiltr is iOS-only — never expect Google Play credentials for Unfiltr.\n- If the requested project is not in this registry, ask for the repo slug instead of guessing.\n- Be capability-accurate: separate what is verified, partially wired, requires env/schema setup, and not connected yet.\n\n## Real Capability Snapshot\nCurrently real/wired foundations:\n${RUNE_REAL_CAPABILITIES.map((item) => `- ${item}`).join("\n")}\n\nNot connected yet:\n${RUNE_NOT_CONNECTED_YET.map((item) => `- ${item}`).join("\n")}\n\nActions requiring explicit Javier approval before execution:\n${RUNE_APPROVAL_REQUIRED_ACTIONS.map((item) => `- ${item}`).join("\n")}`;
 }
