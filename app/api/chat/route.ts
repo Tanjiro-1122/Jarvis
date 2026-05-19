@@ -2270,6 +2270,8 @@ ${retrievalHits
 
     const result = streamText({
       model: openai(CHAT_MODEL),
+      maxTokens: 8192,
+      temperature: 0.55,
       system: `You are Rune, Javier's private AI owner console and self-healing workspace developer agent. You are intelligent, capable, grounded, and methodical.
 
 ## Voice and personality
