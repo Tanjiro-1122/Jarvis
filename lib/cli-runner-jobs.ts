@@ -26,7 +26,7 @@ export async function queueCliRunnerJob(options: {
   metadata?: Record<string, unknown> | null;
 }) {
   const command = cleanCommand(options.command);
-  const workspaceId = options.workspaceId || process.env.JARVIS_DEFAULT_WORKSPACE_ID || null;
+  const workspaceId = options.workspaceId || process.env.RUNE_DEFAULT_WORKSPACE_ID ?? process.env.JARVIS_DEFAULT_WORKSPACE_ID || null;
 
   if (!workspaceId) {
     return { ok: false as const, error: "workspaceId is required to queue a CLI runner job." };
