@@ -108,7 +108,7 @@ export async function proposeAction(input: ProposeActionInput): Promise<{
     .single();
 
   if (error || !data) {
-    await logError({ context: "hands.proposeAction", message: error?.message ?? "Insert failed" });
+    logError("hands.proposeAction", error ?? new Error("Insert failed"));
     return { ok: false, error: error?.message ?? "Failed to store proposal." };
   }
 
