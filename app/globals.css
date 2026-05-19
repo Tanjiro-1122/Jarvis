@@ -4132,3 +4132,25 @@ button:disabled {
   .vault-controls { flex-direction: column; align-items: stretch; }
   .vault-category-tabs { flex-wrap: wrap; }
 }
+/* ── Vault nav chip (chat header) ─────────────────────────── */
+.vault-nav-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(180,80,40,0.15);
+  border: 1px solid rgba(180,80,40,0.35);
+  border-radius: 20px;
+  color: rgba(240,237,232,0.75);
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  text-decoration: none;
+  transition: all 0.15s;
+  cursor: pointer;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+.vault-nav-chip:hover {
+  background: rgba(180,80,40,0.3);
+  color: #f0ede8;
+  border-color: rgba(180,80,40,0.6);
+}
