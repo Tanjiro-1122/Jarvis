@@ -3645,3 +3645,102 @@ button:disabled {
   0%, 100% { box-shadow: 0 0 6px #f97316aa; }
   50% { box-shadow: 0 0 14px #f97316cc; }
 }
+
+/* ── Typing indicator — three ember dots ── */
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 4px;
+}
+.typing-dots span {
+  width: 7px; height: 7px;
+  background: #c25f2a;
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: typing-bounce 1.2s ease-in-out infinite;
+}
+.typing-dots span:nth-child(1) { animation-delay: 0s; }
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* ── Message skeleton loader ── */
+.message-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+}
+.skeleton-line {
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+.skeleton-line:nth-child(1) { width: 85%; }
+.skeleton-line:nth-child(2) { width: 60%; }
+.skeleton-line:nth-child(3) { width: 75%; }
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Improved message spacing ── */
+.message.assistant .markdown-body {
+  line-height: 1.72;
+}
+.message.assistant .markdown-body p {
+  margin: 0 0 0.7em;
+}
+.message.assistant .markdown-body p:last-child {
+  margin-bottom: 0;
+}
+.message.assistant .markdown-body ul,
+.message.assistant .markdown-body ol {
+  padding-left: 1.4em;
+  margin: 0.4em 0 0.7em;
+}
+.message.assistant .markdown-body li {
+  margin-bottom: 0.25em;
+}
+.message.assistant .markdown-body h1,
+.message.assistant .markdown-body h2,
+.message.assistant .markdown-body h3 {
+  font-size: 1em;
+  font-weight: 700;
+  margin: 0.9em 0 0.3em;
+  color: #e6edf3;
+}
+.message.assistant .markdown-body blockquote {
+  border-left: 3px solid #c25f2a;
+  margin: 0.5em 0;
+  padding: 0.3em 0.8em;
+  color: #8b949e;
+  font-style: italic;
+}
+.message.assistant .markdown-body hr {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 0.8em 0;
+}
+.message.assistant .markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.82rem;
+  margin: 0.7em 0;
+}
+.message.assistant .markdown-body th,
+.message.assistant .markdown-body td {
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+}
+.message.assistant .markdown-body th {
+  background: rgba(255,255,255,0.05);
+  font-weight: 600;
+}
